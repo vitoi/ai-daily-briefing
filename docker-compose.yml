@@ -1,0 +1,8 @@
+services:
+  ai-briefing:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
+    restart: "no"
