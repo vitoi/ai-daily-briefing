@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -49,14 +50,33 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 
 DEFAULT_FEEDS = [
     ("OpenAI News", "https://openai.com/news/rss.xml", 10),
-    ("Anthropic News", "https://www.anthropic.com/news/rss.xml", 10),
     ("Google DeepMind", "https://deepmind.google/blog/rss.xml", 10),
     ("Microsoft AI", "https://blogs.microsoft.com/ai/feed/", 8),
     ("Hugging Face", "https://huggingface.co/blog/feed.xml", 8),
     ("MIT Technology Review AI", "https://www.technologyreview.com/topic/artificial-intelligence/feed", 7),
     ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", 6),
     ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/", 5),
+    ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/features", 5),
+    ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", 5),
 ]
+
+# HTTP 请求超时（秒）
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "20"))
+
+# 请求间隔（秒），避免触发反爬风控
+REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "2.0"))
+
+# User-Agent，模拟正常浏览器访问
+HTTP_HEADERS = {
+    "User-Agent": os.getenv(
+        "HTTP_USER_AGENT",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/126.0.0.0 Safari/537.36",
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 KEYWORDS = {
     "llm": 8,
@@ -144,10 +164,31 @@ def fetch_articles() -> list[Article]:
 
     for source, url, weight in parse_feed_config():
         logger.info("抓取 RSS: %s", source)
-        feed = feedparser.parse(url)
+
+        # 使用带超时和 User-Agent 的请求
+        try:
+            response = requests.get(
+                url,
+                headers=HTTP_HEADERS,
+                timeout=REQUEST_TIMEOUT,
+                allow_redirects=True,
+            )
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
+        except requests.RequestException as exc:
+            logger.warning("RSS 请求失败: %s | %s", source, exc)
+            time.sleep(REQUEST_DELAY)
+            continue
+        except Exception as exc:
+            logger.warning("RSS 解析失败: %s | %s", source, exc)
+            time.sleep(REQUEST_DELAY)
+            continue
 
         if getattr(feed, "bozo", False):
             logger.warning("RSS 解析异常: %s | %s", source, getattr(feed, "bozo_exception", ""))
+
+        # 请求间隔，避免触发反爬风控
+        time.sleep(REQUEST_DELAY)
 
         for entry in feed.entries[:30]:
             published = parse_datetime(entry)
