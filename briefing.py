@@ -50,7 +50,6 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 
 DEFAULT_FEEDS = [
     ("OpenAI News", "https://openai.com/news/rss.xml", 10),
-    ("Google DeepMind", "https://deepmind.google/blog/rss.xml", 10),
     ("Hugging Face", "https://huggingface.co/blog/feed.xml", 8),
     ("MIT Technology Review AI", "https://www.technologyreview.com/topic/artificial-intelligence/feed", 7),
     ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", 6),
@@ -58,7 +57,7 @@ DEFAULT_FEEDS = [
     ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/features", 5),
     ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", 5),
     ("AI News (The Decoder)", "https://the-decoder.com/feed/", 5),
-    ("InfoQ AI", "https://www.infoq.com/feed/", 4),
+    ("ZDNet AI", "https://www.zdnet.com/topic/artificial-intelligence/rss.xml", 4),
 ]
 
 # HTTP 请求超时（秒）
