@@ -419,31 +419,30 @@ def post_notion(content: str, date_str: str) -> None:
     })
     children.append({"type": "divider", "divider": {}})
 
-    # 按行构建内容blocks，跳过LLM输出的第一个大标题（已用日期标题替代）
+    # 按行构建内容blocks，跳过LLM输出的所有#开头的标题行（已用日期标题替代）
     lines = content.strip().split("\n")
-    skip_first_heading = True
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
-        if skip_first_heading and stripped.startswith("# "):
-            skip_first_heading = False
+        # 跳过所有#开头的markdown标题行
+        if stripped.startswith("#"):
+            # 但保留编号标题(如"1. xxx")
+            if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
+                clean = stripped.replace("**", "").replace("*", "")
+                children.append({
+                    "type": "heading_2",
+                    "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+                })
+            else:
+                # #开头但不是编号的，提取纯文本作为heading_2（去掉所有#和空格）
+                clean = stripped.lstrip("#").strip().replace("**", "").replace("*", "")
+                if clean:
+                    children.append({
+                        "type": "heading_2",
+                        "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+                    })
             continue
-        skip_first_heading = False
-        if stripped.startswith("===") or stripped.startswith("---"):
-            children.append({"type": "divider", "divider": {}})
-        elif stripped.startswith("## "):
-            clean = stripped.lstrip("# ").strip().replace("**", "").replace("*", "")
-            children.append({
-                "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
-            })
-        elif stripped.startswith("# "):
-            clean = stripped.lstrip("# ").strip().replace("**", "").replace("*", "")
-            children.append({
-                "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
-            })
         elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
             clean = stripped.replace("**", "").replace("*", "")
             children.append({
