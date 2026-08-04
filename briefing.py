@@ -488,6 +488,40 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
 
     # 构建简报内容blocks
     children = []
+
+    # 封面图作为第一个block（Notion file upload方式）
+    cover_block = None
+    if cover_path and os.path.exists(cover_path):
+        try:
+            with open(cover_path, "rb") as img_file:
+                upload_resp = requests.post(
+                    "https://api.notion.com/v1/file_uploads",
+                    headers={
+                        "Authorization": f"Bearer {NOTION_TOKEN}",
+                        "Notion-Version": "2022-06-28",
+                    },
+                    files={"file": ("cover.png", img_file, "image/png")},
+                    data={"mode": "block.parent", "parent": {"type": "page_id", "page_id": NOTION_PAGE_ID}},
+                    timeout=30,
+                )
+                if upload_resp.status_code == 200:
+                    file_id = upload_resp.json().get("id")
+                    cover_block = {
+                        "type": "image",
+                        "image": {
+                            "type": "file_upload",
+                            "file_upload": {"id": file_id},
+                        },
+                    }
+                    logger.info("封面图已上传，准备插入子页面")
+                else:
+                    logger.warning("封面上传失败: %s", upload_resp.text[:200])
+        except Exception as exc:
+            logger.warning("封面上传异常: %s", exc)
+
+    if cover_block:
+        children.append(cover_block)
+
     lines = content.strip().split("\n")
     for line in lines:
         stripped = line.strip()
@@ -555,36 +589,6 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
         timeout=30,
     )
     resp.raise_for_status()
-    page_id = resp.json().get("id")
-
-    # 上传封面图到子页面
-    if cover_path and page_id:
-        try:
-            with open(cover_path, "rb") as img_file:
-                upload_resp = requests.post(
-                    "https://api.notion.com/v1/file_uploads",
-                    headers={
-                        "Authorization": f"Bearer {NOTION_TOKEN}",
-                        "Notion-Version": "2022-06-28",
-                    },
-                    files={"file": ("cover.png", img_file, "image/png")},
-                    data={"mode": "single_page"},
-                    timeout=30,
-                )
-                if upload_resp.status_code == 200:
-                    file_id = upload_resp.json().get("id")
-                    requests.patch(
-                        f"https://api.notion.com/v1/pages/{page_id}",
-                        headers=headers,
-                        json={"cover": {"type": "file_upload", "file_upload": {"id": file_id}}},
-                        timeout=15,
-                    )
-                    logger.info("封面图已上传到Notion子页面")
-                else:
-                    logger.warning("封面上传失败: %s", upload_resp.text[:200])
-        except Exception as exc:
-            logger.warning("封面上传异常: %s", exc)
-
     logger.info("简报已推送到Notion子页面: %s", date_str)
 
 
