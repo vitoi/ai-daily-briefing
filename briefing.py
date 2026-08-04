@@ -401,7 +401,81 @@ def post_webhook(content: str) -> None:
     logger.info("简报已发送到 Webhook")
 
 
-def post_notion(content: str, date_str: str) -> None:
+
+def generate_cover(content: str, date_str: str) -> Path | None:
+    """根据简报内容生成封面图（深蓝渐变背景+标题+Top5列表）"""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        logger.warning("Pillow 未安装，跳过封面图生成")
+        return None
+
+    W, H = 900, 383
+    img = Image.new("RGB", (W, H), (15, 32, 49))
+    draw = ImageDraw.Draw(img)
+
+    # 渐变背景
+    for y in range(H):
+        r = int(15 + (25 - 15) * y / H)
+        g = int(32 + (60 - 32) * y / H)
+        b = int(49 + (80 - 49) * y / H)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # 字体
+    try:
+        font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 36)
+        font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
+        font_item = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
+    except Exception:
+        try:
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+            font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+            font_item = font_sub
+        except Exception:
+            font_title = ImageFont.load_default()
+            font_sub = font_title
+            font_item = font_title
+
+    # 标题
+    draw.text((40, 30), "AI简报 " + date_str, fill=(100, 200, 255), font=font_title)
+    draw.text((40, 75), "全球 AI 与大模型每日简报", fill=(180, 200, 220), font=font_sub)
+
+    # 分隔线
+    draw.line([(40, 105), (W - 40, 105)], fill=(50, 80, 110), width=2)
+
+    # 提取Top5标题（以数字开头的行）
+    titles = []
+    for line in content.strip().split("\n"):
+        stripped = line.strip()
+        if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
+            clean = stripped.replace("**", "").replace("*", "")
+            # 截断过长标题
+            if len(clean) > 65:
+                clean = clean[:62] + "..."
+            titles.append(clean)
+        if len(titles) >= 5:
+            break
+
+    # 绘制标题列表
+    y = 125
+    for i, title in enumerate(titles):
+        # 序号圆点
+        draw.ellipse([(42, y + 3), (54, y + 15)], fill=(100, 200, 255))
+        draw.text((60, y), title, fill=(220, 230, 240), font=font_item)
+        y += 38
+
+    # 底部标签
+    draw.text((40, H - 35), "Top 5 Daily", fill=(80, 120, 150), font=font_sub)
+
+    # 保存
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    cover_path = OUTPUT_DIR / f"cover-{date_str}.png"
+    img.save(cover_path, "PNG")
+    logger.info("封面图已生成: %s", cover_path)
+    return cover_path
+
+
+def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> None:
     """在Notion主页面顶部创建带日期的子页面，简报内容放入子页面"""
     if not NOTION_TOKEN:
         return
@@ -481,6 +555,36 @@ def post_notion(content: str, date_str: str) -> None:
         timeout=30,
     )
     resp.raise_for_status()
+    page_id = resp.json().get("id")
+
+    # 上传封面图到子页面
+    if cover_path and page_id:
+        try:
+            with open(cover_path, "rb") as img_file:
+                upload_resp = requests.post(
+                    "https://api.notion.com/v1/file_uploads",
+                    headers={
+                        "Authorization": f"Bearer {NOTION_TOKEN}",
+                        "Notion-Version": "2022-06-28",
+                    },
+                    files={"file": ("cover.png", img_file, "image/png")},
+                    data={"mode": "single_page"},
+                    timeout=30,
+                )
+                if upload_resp.status_code == 200:
+                    file_id = upload_resp.json().get("id")
+                    requests.patch(
+                        f"https://api.notion.com/v1/pages/{page_id}",
+                        headers=headers,
+                        json={"cover": {"type": "file_upload", "file_upload": {"id": file_id}}},
+                        timeout=15,
+                    )
+                    logger.info("封面图已上传到Notion子页面")
+                else:
+                    logger.warning("封面上传失败: %s", upload_resp.text[:200])
+        except Exception as exc:
+            logger.warning("封面上传异常: %s", exc)
+
     logger.info("简报已推送到Notion子页面: %s", date_str)
 
 
@@ -494,8 +598,10 @@ def main() -> int:
         selected = articles[:MAX_ARTICLES]
         briefing = call_llm(build_prompt(selected))
         path = save_markdown(briefing)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        cover_path = generate_cover(briefing, date_str)
         post_webhook(briefing)
-        post_notion(briefing, datetime.now().strftime("%Y-%m-%d"))
+        post_notion(briefing, date_str, cover_path)
 
         print(f"\n生成成功：{path.resolve()}\n")
         print(briefing)
