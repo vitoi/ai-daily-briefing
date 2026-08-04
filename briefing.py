@@ -451,39 +451,26 @@ def post_notion(content: str, date_str: str) -> None:
     # Notion API限制：每次最多100个blocks
     batch = children[:100]
 
-    # 获取主页面第一个block，用于after参数（插到顶部）
-    list_resp = requests.get(
-        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=1",
-        headers=headers,
-        timeout=15,
-    )
-    after_id = None
-    if list_resp.status_code == 200:
-        results = list_resp.json().get("results", [])
-        if results:
-            after_id = results[0]["id"]
-
-    # 在主页面创建子页面
-    page_block = {
-        "type": "child_page",
-        "child_page": {
-            "title": "AI简报 " + date_str,
-            "children": batch,
+    # 创建子页面（以主页面为parent）
+    page_data = {
+        "parent": {"page_id": NOTION_PAGE_ID},
+        "icon": {"type": "emoji", "emoji": "📢"},
+        "properties": {
+            "title": {
+                "title": [{"type": "text", "text": {"content": "AI简报 " + date_str}}]
+            }
         },
+        "children": batch,
     }
 
-    payload = {"children": [page_block]}
-    if after_id:
-        payload["after"] = after_id
-
-    resp = requests.patch(
-        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+    resp = requests.post(
+        "https://api.notion.com/v1/pages",
         headers=headers,
-        json=payload,
+        json=page_data,
         timeout=30,
     )
     resp.raise_for_status()
-    logger.info("简报已推送到Notion子页面(顶部): %s", date_str)
+    logger.info("简报已推送到Notion子页面: %s", date_str)
 
 
 def main() -> int:
