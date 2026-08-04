@@ -402,6 +402,45 @@ def post_webhook(content: str) -> None:
 
 
 
+
+def upload_cover_to_github(cover_path, date_str: str) -> str | None:
+    """上传封面图到GitHub仓库，返回raw URL"""
+    import base64
+    github_token = os.getenv("GITHUB_TOKEN", "").strip()
+    if not github_token:
+        logger.warning("GITHUB_TOKEN 未配置，跳过封面上传")
+        return None
+
+    repo = os.getenv("GITHUB_REPO", "vitoi/ai-daily-briefing")
+    branch = os.getenv("GITHUB_BRANCH", "main")
+    path_in_repo = f"output/cover-{date_str}.png"
+
+    with open(cover_path, "rb") as f:
+        content_b64 = base64.b64encode(f.read()).decode()
+
+    url = f"https://api.github.com/repos/{repo}/contents/{path_in_repo}"
+    resp = requests.put(
+        url,
+        headers={
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json",
+        },
+        json={
+            "message": f"cover {date_str}",
+            "content": content_b64,
+            "branch": branch,
+        },
+        timeout=30,
+    )
+    if resp.status_code in (200, 201):
+        raw_url = f"https://raw.githubusercontent.com/{repo}/{branch}/{path_in_repo}?t={int(time.time())}"
+        logger.info("封面图已上传GitHub: %s", raw_url)
+        return raw_url
+    else:
+        logger.warning("GitHub上传失败: %s", resp.text[:200])
+        return None
+
+
 def generate_cover(content: str, date_str: str) -> Path | None:
     """根据简报内容生成封面图（深蓝渐变背景+标题+Top5列表）"""
     try:
@@ -555,8 +594,23 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
         timeout=30,
     )
     resp.raise_for_status()
-    if cover_path:
-        logger.info("封面图已保存: %s", cover_path)
+    page_id = resp.json().get("id")
+
+    # 上传封面图到GitHub，获取raw URL，设为Notion子页面cover
+    if cover_path and os.path.exists(cover_path) and page_id:
+        try:
+            cover_url = upload_cover_to_github(cover_path, date_str)
+            if cover_url:
+                requests.patch(
+                    f"https://api.notion.com/v1/pages/{page_id}",
+                    headers=headers,
+                    json={"cover": {"type": "external", "external": {"url": cover_url}}},
+                    timeout=15,
+                )
+                logger.info("封面图已设为Notion子页面cover: %s", cover_url)
+        except Exception as exc:
+            logger.warning("封面cover设置异常: %s", exc)
+
     logger.info("简报已推送到Notion子页面: %s", date_str)
 
 
