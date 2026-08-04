@@ -427,20 +427,23 @@ def post_notion(content: str, date_str: str) -> None:
             continue
         if stripped.startswith("===") or stripped.startswith("---"):
             children.append({"type": "divider", "divider": {}})
-        elif stripped.startswith("# "):
-            children.append({
-                "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
-            })
         elif stripped.startswith("## "):
+            clean = stripped.lstrip("# ").strip().replace("**", "").replace("*", "")
             children.append({
                 "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+            })
+        elif stripped.startswith("# "):
+            clean = stripped.lstrip("# ").strip().replace("**", "").replace("*", "")
+            children.append({
+                "type": "heading_2",
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
             })
         elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
+            clean = stripped.replace("**", "").replace("*", "")
             children.append({
                 "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped}}]},
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
             })
         else:
             # 去掉markdown加粗/斜体符号
