@@ -401,7 +401,7 @@ def post_webhook(content: str) -> None:
 
 
 def post_notion(content: str, date_str: str) -> None:
-    """将简报推送到Notion页面顶部，带日期标题"""
+    """在Notion主页面顶部创建带日期的子页面，简报内容放入子页面"""
     if not NOTION_TOKEN:
         return
 
@@ -411,23 +411,14 @@ def post_notion(content: str, date_str: str) -> None:
         "Content-Type": "application/json",
     }
 
-    # 构建blocks，第一个是日期标题
+    # 构建简报内容blocks
     children = []
-    children.append({
-        "type": "heading_1",
-        "heading_1": {"rich_text": [{"type": "text", "text": {"content": "AI简报 " + date_str}}]},
-    })
-    children.append({"type": "divider", "divider": {}})
-
-    # 按行构建内容blocks，跳过LLM输出的所有#开头的标题行（已用日期标题替代）
     lines = content.strip().split("\n")
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
-        # 跳过所有#开头的markdown标题行
         if stripped.startswith("#"):
-            # 但保留编号标题(如"1. xxx")
             if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
                 clean = stripped.replace("**", "").replace("*", "")
                 children.append({
@@ -435,7 +426,6 @@ def post_notion(content: str, date_str: str) -> None:
                     "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
                 })
             else:
-                # #开头但不是编号的，提取纯文本作为heading_2（去掉所有#和空格）
                 clean = stripped.lstrip("#").strip().replace("**", "").replace("*", "")
                 if clean:
                     children.append({
@@ -443,6 +433,8 @@ def post_notion(content: str, date_str: str) -> None:
                         "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
                     })
             continue
+        if stripped.startswith("===") or stripped.startswith("---"):
+            children.append({"type": "divider", "divider": {}})
         elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
             clean = stripped.replace("**", "").replace("*", "")
             children.append({
@@ -450,7 +442,6 @@ def post_notion(content: str, date_str: str) -> None:
                 "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
             })
         else:
-            # 去掉markdown加粗/斜体符号
             clean = stripped.replace("**", "").replace("*", "")
             children.append({
                 "type": "paragraph",
@@ -460,8 +451,7 @@ def post_notion(content: str, date_str: str) -> None:
     # Notion API限制：每次最多100个blocks
     batch = children[:100]
 
-    # 先获取现有children，再把新内容插入到顶部
-    # Notion API不支持插入到顶部，用after参数指定在第一个block之后插入
+    # 获取主页面第一个block，用于after参数（插到顶部）
     list_resp = requests.get(
         f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=1",
         headers=headers,
@@ -473,8 +463,16 @@ def post_notion(content: str, date_str: str) -> None:
         if results:
             after_id = results[0]["id"]
 
-    # 插入新blocks
-    payload = {"children": batch}
+    # 在主页面创建子页面
+    page_block = {
+        "type": "child_page",
+        "child_page": {
+            "title": "AI简报 " + date_str,
+            "children": batch,
+        },
+    }
+
+    payload = {"children": [page_block]}
     if after_id:
         payload["after"] = after_id
 
@@ -485,7 +483,7 @@ def post_notion(content: str, date_str: str) -> None:
         timeout=30,
     )
     resp.raise_for_status()
-    logger.info("简报已推送到Notion(顶部): %s", NOTION_PAGE_ID)
+    logger.info("简报已推送到Notion子页面(顶部): %s", date_str)
 
 
 def main() -> int:
