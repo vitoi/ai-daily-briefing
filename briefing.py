@@ -342,7 +342,46 @@ def save_markdown(content: str) -> Path:
     path = OUTPUT_DIR / f"ai-llm-briefing-{date_str}.md"
     header = f"# AI & LLM 每日简报 — {date_str}\n\n"
     path.write_text(header + content + "\n", encoding="utf-8")
+
+    # 同时生成公众号纯文本版（去除Markdown符号，适合直接粘贴）
+    wx_path = OUTPUT_DIR / f"ai-llm-briefing-{date_str}-wechat.txt"
+    wx_content = convert_to_wechat_text(content, date_str)
+    wx_path.write_text(wx_content, encoding="utf-8")
+    logger.info("公众号纯文本版: %s", wx_path)
+
     return path
+
+
+def convert_to_wechat_text(md_content: str, date_str: str) -> str:
+    """将Markdown简报转换为公众号友好的纯文本格式"""
+    text = md_content
+
+    # 去掉Markdown标题符号
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+
+    # 去掉加粗符号
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+
+    # 去掉斜体符号
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+
+    # 去掉代码块
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'`(.+?)`', r'\1', text)
+
+    # 链接 [text](url) -> text(url)
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1（\2）', text)
+
+    # 去掉列表符号但保留缩进
+    text = re.sub(r'^[\-\*]\s+', '  ', text, flags=re.MULTILINE)
+
+    # 去掉多余空行（保留单个空行分隔）
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    # 添加标题和分隔线
+    header = f"AI & LLM 每日简报\n{date_str}\n{'=' * 30}\n\n"
+
+    return header + text.strip() + "\n"
 
 
 def post_webhook(content: str) -> None:
