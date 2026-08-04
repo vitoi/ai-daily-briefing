@@ -419,27 +419,35 @@ def post_notion(content: str, date_str: str) -> None:
         if not stripped:
             continue
         if stripped.startswith("#"):
-            if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
-                clean = stripped.replace("**", "").replace("*", "")
-                children.append({
-                    "type": "paragraph",
-                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
-                })
+            # 去掉#和星号
+            clean = stripped.lstrip("#").strip().replace("**", "").replace("*", "")
+            if not clean:
+                continue
+            # 今日行动优先级特殊处理
+            if "行动" in clean or "优先" in clean:
+                prefix = "\U0001F3AF "
             else:
-                clean = stripped.lstrip("#").strip().replace("**", "").replace("*", "")
-                if clean:
-                    children.append({
-                        "type": "paragraph",
-                        "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
-                    })
+                prefix = ""
+            children.append({
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": prefix + clean}}]},
+            })
             continue
         if stripped.startswith("===") or stripped.startswith("---"):
             children.append({"type": "divider", "divider": {}})
+        elif stripped.startswith("- "):
+            # 列表项：去-前缀，去星号
+            clean = stripped.lstrip("- ").strip().replace("**", "").replace("*", "")
+            children.append({
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": "  " + clean}}]},
+            })
         elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
+            # 编号标题或编号项：去星号
             clean = stripped.replace("**", "").replace("*", "")
             children.append({
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
             })
         else:
             clean = stripped.replace("**", "").replace("*", "")
