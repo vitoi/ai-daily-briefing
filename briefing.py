@@ -555,40 +555,8 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
         timeout=30,
     )
     resp.raise_for_status()
-    page_id = resp.json().get("id")
-
-    # 上传封面图并追加到子页面顶部
-    if cover_path and os.path.exists(cover_path) and page_id:
-        try:
-            with open(cover_path, "rb") as img_file:
-                upload_resp = requests.post(
-                    "https://api.notion.com/v1/file_uploads",
-                    headers={
-                        "Authorization": f"Bearer {NOTION_TOKEN}",
-                        "Notion-Version": "2022-06-28",
-                    },
-                    files={"file": ("cover.png", img_file, "image/png")},
-                    data={"mode": "single_page"},
-                    timeout=30,
-                )
-                if upload_resp.status_code == 200:
-                    file_id = upload_resp.json().get("id")
-                    # 追加image block到子页面
-                    img_resp = requests.patch(
-                        f"https://api.notion.com/v1/blocks/{page_id}/children",
-                        headers=headers,
-                        json={"children": [{"type": "image", "image": {"type": "file_upload", "file_upload": {"id": file_id}}}]},
-                        timeout=15,
-                    )
-                    if img_resp.status_code == 200:
-                        logger.info("封面图已插入子页面")
-                    else:
-                        logger.warning("封面插入失败: %s", img_resp.text[:200])
-                else:
-                    logger.warning("封面上传失败: %s", upload_resp.text[:200])
-        except Exception as exc:
-            logger.warning("封面上传异常: %s", exc)
-
+    if cover_path:
+        logger.info("封面图已保存: %s", cover_path)
     logger.info("简报已推送到Notion子页面: %s", date_str)
 
 
