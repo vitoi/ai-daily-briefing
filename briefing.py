@@ -401,7 +401,7 @@ def post_webhook(content: str) -> None:
 
 
 def post_notion(content: str, date_str: str) -> None:
-    """将简报推送到Notion页面，手机端直接复制粘贴到公众号"""
+    """将简报推送到Notion页面顶部，带日期标题"""
     if not NOTION_TOKEN:
         return
 
@@ -411,9 +411,16 @@ def post_notion(content: str, date_str: str) -> None:
         "Content-Type": "application/json",
     }
 
-    # 按行构建Notion blocks
-    lines = content.strip().split("\n")
+    # 构建blocks，第一个是日期标题
     children = []
+    children.append({
+        "type": "heading_1",
+        "heading_1": {"rich_text": [{"type": "text", "text": {"content": "AI简报 " + date_str}}]},
+    })
+    children.append({"type": "divider", "divider": {}})
+
+    # 按行构建内容blocks
+    lines = content.strip().split("\n")
     for line in lines:
         stripped = line.strip()
         if not stripped:
@@ -422,8 +429,8 @@ def post_notion(content: str, date_str: str) -> None:
             children.append({"type": "divider", "divider": {}})
         elif stripped.startswith("# "):
             children.append({
-                "type": "heading_1",
-                "heading_1": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
+                "type": "heading_2",
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
             })
         elif stripped.startswith("## "):
             children.append({
@@ -436,22 +443,42 @@ def post_notion(content: str, date_str: str) -> None:
                 "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped}}]},
             })
         else:
+            # 去掉markdown加粗/斜体符号
+            clean = stripped.replace("**", "").replace("*", "")
             children.append({
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"type": "text", "text": {"content": stripped}}]},
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
             })
 
     # Notion API限制：每次最多100个blocks
     batch = children[:100]
 
+    # 先获取现有children，再把新内容插入到顶部
+    # Notion API不支持插入到顶部，用after参数指定在第一个block之后插入
+    list_resp = requests.get(
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children?page_size=1",
+        headers=headers,
+        timeout=15,
+    )
+    after_id = None
+    if list_resp.status_code == 200:
+        results = list_resp.json().get("results", [])
+        if results:
+            after_id = results[0]["id"]
+
+    # 插入新blocks
+    payload = {"children": batch}
+    if after_id:
+        payload["after"] = after_id
+
     resp = requests.patch(
         f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
         headers=headers,
-        json={"children": batch},
+        json=payload,
         timeout=30,
     )
     resp.raise_for_status()
-    logger.info("简报已推送到Notion: %s", NOTION_PAGE_ID)
+    logger.info("简报已推送到Notion(顶部): %s", NOTION_PAGE_ID)
 
 
 def main() -> int:
