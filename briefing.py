@@ -47,6 +47,8 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/"
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
+NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
+NOTION_PAGE_ID = os.getenv("NOTION_PAGE_ID", "3b26c7e3-f2b1-8039-a9fc-c882801b5819").strip()
 
 DEFAULT_FEEDS = [
     ("OpenAI News", "https://openai.com/news/rss.xml", 10),
@@ -398,6 +400,60 @@ def post_webhook(content: str) -> None:
     logger.info("简报已发送到 Webhook")
 
 
+def post_notion(content: str, date_str: str) -> None:
+    """将简报推送到Notion页面，手机端直接复制粘贴到公众号"""
+    if not NOTION_TOKEN:
+        return
+
+    headers = {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+
+    # 按行构建Notion blocks
+    lines = content.strip().split("\n")
+    children = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("===") or stripped.startswith("---"):
+            children.append({"type": "divider", "divider": {}})
+        elif stripped.startswith("# "):
+            children.append({
+                "type": "heading_1",
+                "heading_1": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
+            })
+        elif stripped.startswith("## "):
+            children.append({
+                "type": "heading_2",
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped.lstrip("# ").strip()}}]},
+            })
+        elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
+            children.append({
+                "type": "heading_2",
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": stripped}}]},
+            })
+        else:
+            children.append({
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": stripped}}]},
+            })
+
+    # Notion API限制：每次最多100个blocks
+    batch = children[:100]
+
+    resp = requests.patch(
+        f"https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children",
+        headers=headers,
+        json={"children": batch},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    logger.info("简报已推送到Notion: %s", NOTION_PAGE_ID)
+
+
 def main() -> int:
     try:
         articles = fetch_articles()
@@ -409,6 +465,7 @@ def main() -> int:
         briefing = call_llm(build_prompt(selected))
         path = save_markdown(briefing)
         post_webhook(briefing)
+        post_notion(briefing, datetime.now().strftime("%Y-%m-%d"))
 
         print(f"\n生成成功：{path.resolve()}\n")
         print(briefing)
