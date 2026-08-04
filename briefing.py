@@ -422,15 +422,15 @@ def post_notion(content: str, date_str: str) -> None:
             if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
                 clean = stripped.replace("**", "").replace("*", "")
                 children.append({
-                    "type": "heading_2",
-                    "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+                    "type": "paragraph",
+                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
                 })
             else:
                 clean = stripped.lstrip("#").strip().replace("**", "").replace("*", "")
                 if clean:
                     children.append({
-                        "type": "heading_2",
-                        "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+                        "type": "paragraph",
+                        "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
                     })
             continue
         if stripped.startswith("===") or stripped.startswith("---"):
@@ -438,8 +438,8 @@ def post_notion(content: str, date_str: str) -> None:
         elif stripped and stripped[0].isdigit() and ". " in stripped[:5]:
             clean = stripped.replace("**", "").replace("*", "")
             children.append({
-                "type": "heading_2",
-                "heading_2": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}, "annotations": {"bold": True}}]},
             })
         else:
             clean = stripped.replace("**", "").replace("*", "")
