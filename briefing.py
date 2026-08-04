@@ -419,12 +419,17 @@ def post_notion(content: str, date_str: str) -> None:
     })
     children.append({"type": "divider", "divider": {}})
 
-    # 按行构建内容blocks
+    # 按行构建内容blocks，跳过LLM输出的第一个大标题（已用日期标题替代）
     lines = content.strip().split("\n")
+    skip_first_heading = True
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
+        if skip_first_heading and stripped.startswith("# "):
+            skip_first_heading = False
+            continue
+        skip_first_heading = False
         if stripped.startswith("===") or stripped.startswith("---"):
             children.append({"type": "divider", "divider": {}})
         elif stripped.startswith("## "):
