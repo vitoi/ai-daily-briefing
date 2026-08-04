@@ -451,27 +451,12 @@ def post_notion(content: str, date_str: str) -> None:
             })
         else:
             clean = stripped.replace("**", "").replace("*", "")
-            # 检测Markdown链接 [text](url)，转为Notion link对象
-            link_parts = re.split(r"\[([^\]]+)\]\(([^)]+)\)", clean)
-            if len(link_parts) > 1:
-                # 有链接，构建rich_text数组
-                rich_text = []
-                for i in range(0, len(link_parts), 3):
-                    if link_parts[i]:
-                        rich_text.append({"type": "text", "text": {"content": link_parts[i]}})
-                    if i + 2 < len(link_parts):
-                        link_text = link_parts[i + 1]
-                        link_url = link_parts[i + 2]
-                        rich_text.append({"type": "text", "text": {"content": link_text, "link": {"url": link_url}}})
-                children.append({
-                    "type": "paragraph",
-                    "paragraph": {"rich_text": rich_text},
-                })
-            else:
-                children.append({
-                    "type": "paragraph",
-                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
-                })
+            # 把 [text](url) 转为 text（url）纯文本，公众号粘贴可见
+            clean = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1（\2）", clean)
+            children.append({
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
+            })
 
     # Notion API限制：每次最多100个blocks
     batch = children[:100]
