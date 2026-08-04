@@ -412,7 +412,7 @@ def upload_cover_to_github(cover_path, date_str: str) -> str | None:
         return None
 
     repo = os.getenv("GITHUB_REPO", "vitoi/ai-daily-briefing")
-    branch = os.getenv("GITHUB_BRANCH", "main")
+    branch = os.getenv("GITHUB_BRANCH", "gh-pages")
     path_in_repo = f"output/cover-{date_str}-{int(time.time())}.png"
 
     with open(cover_path, "rb") as f:
