@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F2027"/>
+      <stop offset="100%" style="stop-color:#2C5364"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00F5A0"/>
+      <stop offset="100%" style="stop-color:#00D9F5"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- 圆形背景 -->
+  <circle cx="150" cy="150" r="150" fill="url(#bg)"/>
+  
+  <!-- 芯片外框 -->
+  <rect x="60" y="60" width="180" height="180" rx="20" fill="url(#chip)" stroke="url(#accent)" stroke-width="2"/>
+  
+  <!-- 芯片引脚 - 上 -->
+  <g fill="#00F5A0" opacity="0.6">
+    <rect x="85" y="45" width="6" height="20" rx="2"/>
+    <rect x="105" y="45" width="6" height="20" rx="2"/>
+    <rect x="125" y="45" width="6" height="20" rx="2"/>
+    <rect x="145" y="45" width="6" height="20" rx="2"/>
+    <rect x="165" y="45" width="6" height="20" rx="2"/>
+    <rect x="185" y="45" width="6" height="20" rx="2"/>
+    <rect x="205" y="45" width="6" height="20" rx="2"/>
+  </g>
+  <!-- 芯片引脚 - 下 -->
+  <g fill="#00F5A0" opacity="0.6">
+    <rect x="85" y="240" width="6" height="20" rx="2"/>
+    <rect x="105" y="240" width="6" height="20" rx="2"/>
+    <rect x="125" y="240" width="6" height="20" rx="2"/>
+    <rect x="145" y="240" width="6" height="20" rx="2"/>
+    <rect x="165" y="240" width="6" height="20" rx="2"/>
+    <rect x="185" y="240" width="6" height="20" rx="2"/>
+    <rect x="205" y="240" width="6" height="20" rx="2"/>
+  </g>
+  <!-- 芯片引脚 - 左 -->
+  <g fill="#00F5A0" opacity="0.6">
+    <rect x="45" y="85" width="20" height="6" rx="2"/>
+    <rect x="45" y="105" width="20" height="6" rx="2"/>
+    <rect x="45" y="125" width="20" height="6" rx="2"/>
+    <rect x="45" y="145" width="20" height="6" rx="2"/>
+    <rect x="45" y="165" width="20" height="6" rx="2"/>
+    <rect x="45" y="185" width="20" height="6" rx="2"/>
+    <rect x="45" y="205" width="20" height="6" rx="2"/>
+  </g>
+  <!-- 芯片引脚 - 右 -->
+  <g fill="#00F5A0" opacity="0.6">
+    <rect x="240" y="85" width="20" height="6" rx="2"/>
+    <rect x="240" y="105" width="20" height="6" rx="2"/>
+    <rect x="240" y="125" width="20" height="6" rx="2"/>
+    <rect x="240" y="145" width="20" height="6" rx="2"/>
+    <rect x="240" y="165" width="20" height="6" rx="2"/>
+    <rect x="240" y="185" width="20" height="6" rx="2"/>
+    <rect x="240" y="205" width="20" height="6" rx="2"/>
+  </g>
+  
+  <!-- 芯片内部电路纹理 -->
+  <g stroke="#00F5A0" stroke-width="1" fill="none" opacity="0.15">
+    <path d="M 80 90 L 120 90 L 120 120 L 160 120"/>
+    <path d="M 80 150 L 100 150 L 100 180 L 140 180 L 140 210"/>
+    <path d="M 220 90 L 180 90 L 180 130"/>
+    <path d="M 220 170 L 200 170 L 200 200 L 170 200"/>
+    <circle cx="120" cy="120" r="3" fill="#00F5A0" opacity="0.3"/>
+    <circle cx="160" cy="120" r="3" fill="#00F5A0" opacity="0.3"/>
+    <circle cx="100" cy="180" r="3" fill="#00F5A0" opacity="0.3"/>
+    <circle cx="140" cy="180" r="3" fill="#00F5A0" opacity="0.3"/>
+    <circle cx="180" cy="130" r="3" fill="#00F5A0" opacity="0.3"/>
+    <circle cx="200" cy="200" r="3" fill="#00F5A0" opacity="0.3"/>
+  </g>
+  
+  <!-- LLM 字母 -->
+  <text x="150" y="170" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="72" font-weight="900" fill="url(#accent)" text-anchor="middle" letter-spacing="-2">
+    LLM
+  </text>
+  
+  <!-- 底部小字 -->
+  <text x="150" y="205" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="16" font-weight="500" fill="#ffffff" opacity="0.5" text-anchor="middle" letter-spacing="3">
+    DAILY
+  </text>
+  
+  <!-- 顶部高光 -->
+  <ellipse cx="150" cy="70" rx="80" ry="20" fill="#ffffff" opacity="0.05"/>
+</svg>

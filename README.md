@@ -5,8 +5,9 @@
 - 从可信 RSS 源抓取最近 48 小时的全球 AI / LLM 新闻
 - 去重并按可信度、时效性和主题重要性排序
 - 调用 OpenAI 兼容接口生成中文 Top 5 简报
-- 输出 Markdown 文件
+- 输出 Markdown 文件 + 公众号纯文本版
 - 可选推送到 Webhook
+- 可选推送到 Notion（每天创建独立子页面）
 - 支持 macOS、Linux、Windows 和 Docker
 
 ## 一、快速启动
@@ -31,7 +32,8 @@ run.bat
 生成结果位于：
 
 ```text
-output/ai-llm-briefing-YYYY-MM-DD.md
+output/ai-llm-briefing-YYYY-MM-DD.md          # Markdown 版
+output/ai-llm-briefing-YYYY-MM-DD-wechat.txt   # 公众号纯文本版
 ```
 
 ## 二、使用自定义模型
@@ -156,7 +158,34 @@ WEBHOOK_URL=https://your-webhook.example.com/briefing
 
 企业微信、飞书、Slack 的消息格式不同，建议通过一个轻量网关适配。
 
-## 六、建议配置
+## 六、Notion 推送
+
+`.env` 中填写：
+
+```env
+NOTION_TOKEN=ntn_your_integration_secret
+NOTION_PAGE_ID=your-main-page-id
+```
+
+配置步骤：
+
+1. 访问 https://www.notion.so/profile/integrations 创建 Integration，复制 Secret
+2. 在 Notion 中创建一个主页面（如"AI简报"）
+3. 点击页面右上角"..." → Connect to → 选择刚创建的 Integration
+4. 从页面 URL 中获取页面 ID（32位字符串）
+5. 填入 .env
+
+每天运行时会自动在主页面下创建子页面（标题为"AI简报 YYYY-MM-DD"），简报内容放入子页面。
+
+## 七、公众号发布
+
+未认证订阅号无 API 推送权限，采用手动方式：
+
+1. 服务器 crontab 每天 8:00 自动生成简报并推送 Notion
+2. 手机 Notion 打开当天子页面，全选复制
+3. 粘贴到微信公众号后台编辑器，群发
+
+## 八、建议配置
 
 - `HOURS_BACK=48`：周末或低新闻量时更稳定
 - `TOP_N=5`：保持简报紧凑

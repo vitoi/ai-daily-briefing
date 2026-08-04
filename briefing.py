@@ -52,7 +52,6 @@ NOTION_PAGE_ID = os.getenv("NOTION_PAGE_ID", "3b26c7e3-f2b1-8039-a9fc-c882801b58
 
 DEFAULT_FEEDS = [
     ("OpenAI News", "https://openai.com/news/rss.xml", 10),
-    ("Hugging Face", "https://huggingface.co/blog/feed.xml", 8),
     ("MIT Technology Review AI", "https://www.technologyreview.com/topic/artificial-intelligence/feed", 7),
     ("TechCrunch AI", "https://techcrunch.com/category/artificial-intelligence/feed/", 6),
     ("VentureBeat AI", "https://venturebeat.com/category/ai/feed/", 5),
@@ -60,6 +59,8 @@ DEFAULT_FEEDS = [
     ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", 5),
     ("AI News (The Decoder)", "https://the-decoder.com/feed/", 5),
     ("ZDNet AI", "https://www.zdnet.com/topic/artificial-intelligence/rss.xml", 4),
+    ("AI Business", "https://aibusiness.com/feed", 4),
+    ("VentureBeat Generative AI", "https://venturebeat.com/category/generative-ai/feed/", 4),
 ]
 
 # HTTP 请求超时（秒）
