@@ -442,74 +442,115 @@ def upload_cover_to_github(cover_path, date_str: str) -> str | None:
 
 
 def generate_cover(content: str, date_str: str) -> Path | None:
-    """根据简报内容生成封面图（深蓝渐变背景+标题+Top5列表）"""
+    """根据简报内容生成封面图（科技感几何风格，参考Codex/Claude）"""
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
         logger.warning("Pillow 未安装，跳过封面图生成")
         return None
 
-    W, H = 900, 383
-    img = Image.new("RGB", (W, H), (15, 32, 49))
+    W, H = 900, 600
+    img = Image.new("RGB", (W, H), (10, 14, 20))
     draw = ImageDraw.Draw(img)
 
-    # 渐变背景
+    # 渐变背景（深蓝→深灰）
     for y in range(H):
-        r = int(15 + (25 - 15) * y / H)
-        g = int(32 + (60 - 32) * y / H)
-        b = int(49 + (80 - 49) * y / H)
+        r = int(10 + (18 - 10) * y / H)
+        g = int(14 + (22 - 14) * y / H)
+        b = int(20 + (35 - 20) * y / H)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # 科技感几何装饰
+    # 右上角网格线
+    for i in range(0, 200, 25):
+        draw.line([(W - 200 + i, 0), (W, 200 - i)], fill=(25, 35, 50), width=1)
+    for i in range(0, 200, 25):
+        draw.line([(W, 0 + i), (W - 200 + i, 200)], fill=(25, 35, 50), width=1)
+
+    # 左下角三角形装饰
+    tri_color = (20, 30, 45)
+    draw.polygon([(0, H), (120, H), (0, H - 120)], fill=tri_color)
+    draw.polygon([(0, H), (80, H), (0, H - 80)], fill=(25, 40, 55))
+
+    # 右下角六边形装饰
+    cx, cy, r = W - 60, H - 60, 40
+    hex_pts = [(cx + r * 0.866 * (1 if i % 2 == 0 else -1), cy + r * 0.5 * i - r) for i in range(6)]
+    # 简化六边形
+    import math
+    hex_pts = []
+    for i in range(6):
+        angle = math.pi / 3 * i - math.pi / 6
+        hex_pts.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+    draw.polygon(hex_pts, outline=(35, 50, 70), width=2)
+
+    # 顶部强调线（渐变色条）
+    for x in range(40, W - 40):
+        ratio = x / (W - 80)
+        r2 = int(50 + (100 - 50) * ratio)
+        g2 = int(120 + (200 - 120) * ratio)
+        b2 = int(200 + (255 - 200) * ratio)
+        draw.point((x, 20), fill=(r2, g2, b2))
+    draw.line([(40, 21), (W - 40, 21)], fill=(60, 140, 220), width=1)
 
     # 字体（优先macOS，其次Linux中文字体）
     try:
-        font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 36)
-        font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
-        font_item = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
+        font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 42)
+        font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 20)
+        font_item = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
+        font_num = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 22)
     except Exception:
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 36)
-            font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
-            font_item = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 16)
+            font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 42)
+            font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 20)
+            font_item = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
+            font_num = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 22)
         except Exception:
             try:
-                font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
-                font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+                font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 38)
+                font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
                 font_item = font_sub
+                font_num = font_sub
             except Exception:
                 font_title = ImageFont.load_default()
                 font_sub = font_title
                 font_item = font_title
+                font_num = font_title
 
-    # 标题
-    draw.text((40, 30), "AI简报 " + date_str, fill=(100, 200, 255), font=font_title)
-    draw.text((40, 75), "全球 AI 与大模型每日简报", fill=(180, 200, 220), font=font_sub)
+    # 标题区
+    draw.text((40, 40), "AI简报", fill=(80, 180, 255), font=font_title)
+    draw.text((40, 90), date_str, fill=(200, 210, 220), font=font_sub)
+    draw.text((40, 115), "全球 AI 与大模型每日简报", fill=(120, 140, 160), font=font_sub)
 
     # 分隔线
-    draw.line([(40, 105), (W - 40, 105)], fill=(50, 80, 110), width=2)
+    draw.line([(40, 150), (W - 40, 150)], fill=(30, 45, 65), width=1)
 
-    # 提取Top5标题（以数字开头的行）
+    # 提取Top5标题
     titles = []
     for line in content.strip().split("\n"):
         stripped = line.strip()
         if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
             clean = stripped.replace("**", "").replace("*", "")
-            # 截断过长标题
-            if len(clean) > 65:
-                clean = clean[:62] + "..."
+            # 去掉开头的编号
+            clean = clean.split(". ", 1)[-1] if ". " in clean[:5] else clean
+            if len(clean) > 50:
+                clean = clean[:47] + "..."
             titles.append(clean)
         if len(titles) >= 5:
             break
 
     # 绘制标题列表
-    y = 125
+    y = 175
     for i, title in enumerate(titles):
-        # 序号圆点
-        draw.ellipse([(42, y + 3), (54, y + 15)], fill=(100, 200, 255))
-        draw.text((60, y), title, fill=(220, 230, 240), font=font_item)
-        y += 38
+        # 编号方块
+        bx, by = 40, y
+        draw.rounded_rectangle([(bx, by), (bx + 28, by + 28)], radius=4, fill=(30, 50, 75), outline=(60, 100, 150), width=1)
+        draw.text((bx + 8, by + 2), str(i + 1), fill=(100, 180, 255), font=font_num)
+        # 标题文字
+        draw.text((80, y + 4), title, fill=(210, 220, 235), font=font_item)
+        y += 55
 
     # 底部标签
-    draw.text((40, H - 35), "Top 5 Daily", fill=(80, 120, 150), font=font_sub)
+    draw.text((40, H - 35), "Top 5 Daily", fill=(60, 90, 120), font=font_sub)
 
     # 保存
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
