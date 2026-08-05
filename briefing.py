@@ -442,103 +442,105 @@ def upload_cover_to_github(cover_path, date_str: str) -> str | None:
 
 
 def generate_cover(content: str, date_str: str) -> Path | None:
-    """根据简报内容生成封面图（科技感几何风格，参考Codex/Claude）"""
+    """生成封面图（方案A：深蓝渐变+居中大标题+底部信息条）"""
     try:
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw, ImageFont, ImageFilter
     except ImportError:
         logger.warning("Pillow 未安装，跳过封面图生成")
         return None
 
-    W, H = 900, 600
-    img = Image.new("RGB", (W, H), (10, 14, 20))
+    import random
+    W, H = 1200, 630
+    img = Image.new("RGB", (W, H), (15, 23, 42))
     draw = ImageDraw.Draw(img)
 
-    # 渐变背景（深蓝→深灰）
+    # 深蓝渐变背景 #1E3A8A → #312E81 → #1E1B4B
     for y in range(H):
-        r = int(10 + (18 - 10) * y / H)
-        g = int(14 + (22 - 14) * y / H)
-        b = int(20 + (35 - 20) * y / H)
+        ratio = y / H
+        if ratio < 0.5:
+            t = ratio / 0.5
+            r = int(30 + (49 - 30) * t)
+            g = int(58 + (46 - 58) * t)
+            b = int(138 + (129 - 138) * t)
+        else:
+            t = (ratio - 0.5) / 0.5
+            r = int(49 + (30 - 49) * t)
+            g = int(46 + (27 - 46) * t)
+            b = int(129 + (75 - 129) * t)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-    # 科技感装饰：顶部渐变色条
-    for x in range(40, W - 40):
-        ratio = x / (W - 80)
-        r2 = int(50 + (100 - 50) * ratio)
-        g2 = int(120 + (200 - 120) * ratio)
-        b2 = int(200 + (255 - 200) * ratio)
-        draw.point((x, 20), fill=(r2, g2, b2))
-    draw.line([(40, 21), (W - 40, 21)], fill=(60, 140, 220), width=1)
+    # 微弱网格线（白色5%透明度）
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+    for x in range(0, W, 40):
+        overlay_draw.line([(x, 0), (x, H)], fill=(255, 255, 255, 8), width=1)
+    for y in range(0, H, 40):
+        overlay_draw.line([(0, y), (W, y)], fill=(255, 255, 255, 8), width=1)
 
-    # 字体（优先macOS，其次Linux中文字体）
+    # 右上角粒子点
+    random.seed(hash(date_str) % 2**32)
+    for _ in range(60):
+        px = random.randint(W - 300, W - 20)
+        py = random.randint(20, 200)
+        ps = random.randint(1, 3)
+        pa = random.randint(15, 60)
+        overlay_draw.ellipse([(px, py), (px + ps, py + ps)], fill=(100, 200, 255, pa))
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    # 字体
     try:
-        font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 42)
-        font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 20)
-        font_item = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
-        font_num = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 22)
+        font_brand = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 20)
+        font_date = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
+        font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 56)
+        font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 24)
+        font_bar = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 16)
     except Exception:
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 42)
-            font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 20)
-            font_item = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
-            font_num = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 22)
+            font_brand = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 20)
+            font_date = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
+            font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 56)
+            font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 24)
+            font_bar = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
         except Exception:
-            try:
-                font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 38)
-                font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-                font_item = font_sub
-                font_num = font_sub
-            except Exception:
-                font_title = ImageFont.load_default()
-                font_sub = font_title
-                font_item = font_title
-                font_num = font_title
+            font_brand = font_date = font_title = font_sub = font_bar = ImageFont.load_default()
 
-    # 标题区
-    draw.text((40, 40), "AI简报", fill=(80, 180, 255), font=font_title)
-    draw.text((40, 90), date_str, fill=(200, 210, 220), font=font_sub)
-    draw.text((40, 115), "全球 AI 与大模型每日简报", fill=(120, 140, 160), font=font_sub)
+    # 顶部品牌区
+    draw.text((60, 40), "理看AI", fill=(255, 255, 255), font=font_brand)
+    # 右上日期
+    date_display = date_str.replace("-", ".")
+    date_bbox = draw.textbbox((0, 0), date_display, font=font_date)
+    date_w = date_bbox[2] - date_bbox[0]
+    draw.text((W - date_w - 60, 42), date_display, fill=(180, 200, 230), font=font_date)
 
-    # 分隔线
-    draw.line([(40, 150), (W - 40, 150)], fill=(30, 45, 65), width=1)
+    # 中央标题
+    title_y = 200
+    # 标题左侧青色竖线
+    draw.rectangle([(60, title_y + 10), (64, title_y + 70)], fill=(0, 217, 255))
+    draw.text((80, title_y), "AI 每日简报", fill=(255, 255, 255), font=font_title)
+    # 副标题
+    draw.text((80, title_y + 80), "全球 AI 与大模型领域每日精选", fill=(150, 180, 220), font=font_sub)
+    # 标题下方青色横线
+    draw.rectangle([(80, title_y + 120), (280, title_y + 123)], fill=(0, 217, 255))
 
-    # 提取Top5标题
-    titles = []
-    for line in content.strip().split("\n"):
-        stripped = line.strip()
-        if stripped and stripped[0].isdigit() and ". " in stripped[:5]:
-            clean = stripped.replace("**", "").replace("*", "")
-            # 去掉开头的编号
-            clean = clean.split(". ", 1)[-1] if ". " in clean[:5] else clean
-            if len(clean) > 50:
-                clean = clean[:47] + "..."
-            titles.append(clean)
-        if len(titles) >= 5:
-            break
-
-    # 绘制标题列表（自动换行）
-    y = 175
-    max_chars_per_line = 38
-    for i, title in enumerate(titles):
-        # 编号方块
-        bx, by = 40, y
-        draw.rounded_rectangle([(bx, by), (bx + 28, by + 28)], radius=4, fill=(30, 50, 75), outline=(60, 100, 150), width=1)
-        draw.text((bx + 8, by + 2), str(i + 1), fill=(100, 180, 255), font=font_num)
-
-        # 标题自动换行
-        text_x = 80
-        text_y = y + 4
-        remaining = title
-        first_line = True
-        while remaining:
-            line_text = remaining[:max_chars_per_line]
-            remaining = remaining[max_chars_per_line:]
-            draw.text((text_x, text_y), line_text, fill=(210, 220, 235), font=font_item)
-            text_y += 24
-            first_line = False
-        y = text_y + 18
-
-    # 底部标签
-    draw.text((40, H - 35), "Top 5 Daily", fill=(60, 90, 120), font=font_sub)
+    # 底部半透明信息条
+    bar_h = 50
+    bar_overlay = Image.new("RGBA", (W, bar_h), (0, 0, 0, 100))
+    img.paste(Image.alpha_composite(Image.new("RGBA", (W, bar_h), (0, 0, 0, 0)), bar_overlay), (0, H - bar_h))
+    draw = ImageDraw.Draw(img)
+    # 底部信息条上方渐变光带
+    for x in range(W):
+        ratio = x / W
+        r = int(0 + (123 - 0) * ratio)
+        g = int(217 + (97 - 217) * ratio)
+        b = int(255 + (247 - 255) * ratio)
+        draw.point((x, H - bar_h - 1), fill=(r, g, b))
+    # 底部文字
+    draw.text((60, H - bar_h + 15), "# " + date_str.replace("-", ""), fill=(200, 210, 230), font=font_bar)
+    tags = "Technology · AI · Newsletter"
+    tags_bbox = draw.textbbox((0, 0), tags, font=font_bar)
+    tags_w = tags_bbox[2] - tags_bbox[0]
+    draw.text((W - tags_w - 60, H - bar_h + 15), tags, fill=(200, 210, 230), font=font_bar)
 
     # 保存
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
