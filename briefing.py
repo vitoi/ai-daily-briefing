@@ -450,7 +450,7 @@ def generate_cover(content: str, date_str: str) -> Path | None:
         return None
 
     import random
-    W, H = 1200, 630
+    W, H = 1200, 510
     img = Image.new("RGB", (W, H), (15, 23, 42))
     draw = ImageDraw.Draw(img)
 
