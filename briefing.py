@@ -442,7 +442,7 @@ def upload_cover_to_github(cover_path, date_str: str) -> str | None:
 
 
 def generate_cover(content: str, date_str: str) -> Path | None:
-    """生成封面图（方案A：深蓝渐变+居中大标题+底部信息条）"""
+    """生成封面图（AI Intelligence Hub风格 - 深蓝背景+AI Core发光球体+网格粒子+底部信息条）"""
     try:
         from PIL import Image, ImageDraw, ImageFont, ImageFilter
     except ImportError:
@@ -450,102 +450,162 @@ def generate_cover(content: str, date_str: str) -> Path | None:
         return None
 
     import random
-    W, H = 1200, 510
-    img = Image.new("RGB", (W, H), (15, 23, 42))
+    import math
+
+    W, H = 900, 383
+    img = Image.new("RGBA", (W, H), (6, 21, 47, 255))
     draw = ImageDraw.Draw(img)
 
-    # 深蓝渐变背景 #1E3A8A → #312E81 → #1E1B4B
+    # ── 深蓝渐变背景 #06152F → #1E1B4B ──
     for y in range(H):
-        ratio = y / H
-        if ratio < 0.5:
-            t = ratio / 0.5
-            r = int(30 + (49 - 30) * t)
-            g = int(58 + (46 - 58) * t)
-            b = int(138 + (129 - 138) * t)
-        else:
-            t = (ratio - 0.5) / 0.5
-            r = int(49 + (30 - 49) * t)
-            g = int(46 + (27 - 46) * t)
-            b = int(129 + (75 - 129) * t)
-        draw.line([(0, y), (W, y)], fill=(r, g, b))
+        t = y / H
+        r = int(6 + (30 - 6) * t)
+        g = int(21 + (27 - 21) * t)
+        b = int(47 + (75 - 47) * t)
+        draw.line([(0, y), (W, y)], fill=(r, g, b, 255))
 
-    # 微弱网格线（白色5%透明度）
+    # ── 微弱网格线 ──
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    overlay_draw = ImageDraw.Draw(overlay)
-    for x in range(0, W, 40):
-        overlay_draw.line([(x, 0), (x, H)], fill=(255, 255, 255, 8), width=1)
-    for y in range(0, H, 40):
-        overlay_draw.line([(0, y), (W, y)], fill=(255, 255, 255, 8), width=1)
+    od = ImageDraw.Draw(overlay)
+    for x in range(0, W, 30):
+        od.line([(x, 0), (x, H)], fill=(255, 255, 255, 6), width=1)
+    for y in range(0, H, 30):
+        od.line([(0, y), (W, y)], fill=(255, 255, 255, 6), width=1)
 
-    # 右上角粒子点
+    # ── 粒子点（右上+右侧AI Core区域）──
     random.seed(hash(date_str) % 2**32)
-    for _ in range(60):
-        px = random.randint(W - 300, W - 20)
-        py = random.randint(20, 200)
-        ps = random.randint(1, 3)
-        pa = random.randint(15, 60)
-        overlay_draw.ellipse([(px, py), (px + ps, py + ps)], fill=(100, 200, 255, pa))
-    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+    for _ in range(80):
+        px = random.randint(W - 350, W - 30)
+        py = random.randint(20, H - 60)
+        ps = random.randint(1, 2)
+        pa = random.randint(10, 50)
+        color_choice = random.choice([(0, 217, 255), (123, 97, 247), (255, 255, 255)])
+        od.ellipse([(px, py), (px + ps, py + ps)], fill=(*color_choice, pa))
+
+    img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
 
-    # 字体
+    # ── 右侧 AI Core 发光球体 ──
+    cx, cy = W - 140, H // 2
+    # 外层光晕（多层模糊圆）
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for radius, alpha in [(90, 8), (75, 15), (60, 25), (48, 40)]:
+        gd.ellipse([(cx - radius, cy - radius), (cx + radius, cy + radius)], fill=(0, 217, 255, alpha))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=6))
+    img = Image.alpha_composite(img, glow)
+    draw = ImageDraw.Draw(img)
+
+    # AI Core 同心圆环
+    for ring_r, alpha in [(42, 60), (34, 100), (26, 160), (18, 220)]:
+        draw.ellipse([(cx - ring_r, cy - ring_r), (cx + ring_r, cy + ring_r)],
+                      outline=(0, 217, 255, alpha), width=1)
+
+    # AI Core 核心实心圆 + 紫色内核
+    draw.ellipse([(cx - 14, cy - 14), (cx + 14, cy + 14)], fill=(0, 217, 255, 200))
+    draw.ellipse([(cx - 8, cy - 8), (cx + 8, cy + 8)], fill=(123, 97, 247, 255))
+
+    # AI Core 辐射线（8方向）
+    for angle_deg in range(0, 360, 45):
+        angle = math.radians(angle_deg)
+        x1 = cx + 48 * math.cos(angle)
+        y1 = cy + 48 * math.sin(angle)
+        x2 = cx + 68 * math.cos(angle)
+        y2 = cy + 68 * math.sin(angle)
+        draw.line([(x1, y1), (x2, y2)], fill=(0, 217, 255, 80), width=1)
+        # 端点小圆
+        draw.ellipse([(x2 - 2, y2 - 2), (x2 + 2, y2 + 2)], fill=(0, 217, 255, 120))
+
+    # AI Core 轨道环（倾斜椭圆）
+    orbit = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od2 = ImageDraw.Draw(orbit)
+    od2.ellipse([(cx - 75, cy - 30), (cx + 75, cy + 30)], outline=(123, 97, 247, 40), width=1)
+    od2.ellipse([(cx - 60, cy - 55), (cx + 60, cy + 55)], outline=(0, 217, 255, 25), width=1)
+    img = Image.alpha_composite(img, orbit)
+    draw = ImageDraw.Draw(img)
+
+    # ── 顶部渐变光带 ──
+    for x in range(60, W - 60):
+        t = (x - 60) / (W - 120)
+        r = int(0 + (123 - 0) * t)
+        g = int(217 + (97 - 217) * t)
+        b = int(255 + (247 - 255) * t)
+        draw.point((x, 15), fill=(r, g, b, 200))
+
+    # ── 字体 ──
     try:
-        font_brand = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 20)
-        font_date = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
-        font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 56)
-        font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 24)
-        font_bar = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 16)
+        font_brand = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
+        font_date = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 14)
+        font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 42)
+        font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 16)
+        font_bar = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 13)
     except Exception:
         try:
-            font_brand = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 20)
-            font_date = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
-            font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 56)
-            font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 24)
-            font_bar = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
+            font_brand = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
+            font_date = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 14)
+            font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 42)
+            font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
+            font_bar = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 13)
         except Exception:
             font_brand = font_date = font_title = font_sub = font_bar = ImageFont.load_default()
 
-    # 顶部品牌区
-    draw.text((60, 40), "理看AI", fill=(255, 255, 255), font=font_brand)
-    # 右上日期
+    # ── 左侧标题区 ──
+    # 品牌名
+    draw.text((40, 35), "理看AI", fill=(255, 255, 255, 220), font=font_brand)
+    # 日期（右上）
     date_display = date_str.replace("-", ".")
     date_bbox = draw.textbbox((0, 0), date_display, font=font_date)
     date_w = date_bbox[2] - date_bbox[0]
-    draw.text((W - date_w - 60, 42), date_display, fill=(180, 200, 230), font=font_date)
+    draw.text((W - date_w - 40, 37), date_display, fill=(150, 180, 220, 200), font=font_date)
 
-    # 中央标题
-    title_y = 200
+    # 主标题
+    title_y = 110
     # 标题左侧青色竖线
-    draw.rectangle([(60, title_y + 10), (64, title_y + 70)], fill=(0, 217, 255))
-    draw.text((80, title_y), "AI 每日简报", fill=(255, 255, 255), font=font_title)
-    # 副标题
-    draw.text((80, title_y + 80), "全球 AI 与大模型领域每日精选", fill=(150, 180, 220), font=font_sub)
-    # 标题下方青色横线
-    draw.rectangle([(80, title_y + 120), (280, title_y + 123)], fill=(0, 217, 255))
+    draw.rectangle([(40, title_y + 5), (44, title_y + 50)], fill=(0, 217, 255, 255))
+    draw.text((56, title_y), "AI 每日简报", fill=(255, 255, 255, 255), font=font_title)
 
-    # 底部半透明信息条
-    bar_h = 50
-    bar_overlay = Image.new("RGBA", (W, bar_h), (0, 0, 0, 100))
-    img.paste(Image.alpha_composite(Image.new("RGBA", (W, bar_h), (0, 0, 0, 0)), bar_overlay), (0, H - bar_h))
-    draw = ImageDraw.Draw(img)
-    # 底部信息条上方渐变光带
+    # 副标题
+    draw.text((56, title_y + 60), "全球 AI 与大模型领域每日精选", fill=(130, 160, 200, 220), font=font_sub)
+
+    # 标题下方渐变横线
+    for x in range(56, 256):
+        t = (x - 56) / 200
+        r = int(0 + (123 - 0) * t)
+        g = int(217 + (97 - 217) * t)
+        b = int(255 + (247 - 255) * t)
+        draw.point((x, title_y + 90), fill=(r, g, b, 200))
+
+    # ── 底部半透明信息条（玻璃拟态）──
+    bar_h = 38
+    bar_overlay = Image.new("RGBA", (W, bar_h), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bar_overlay)
+    # 渐变半透明背景
     for x in range(W):
-        ratio = x / W
-        r = int(0 + (123 - 0) * ratio)
-        g = int(217 + (97 - 217) * ratio)
-        b = int(255 + (247 - 255) * ratio)
-        draw.point((x, H - bar_h - 1), fill=(r, g, b))
+        t = x / W
+        alpha = int(80 + 40 * math.sin(t * math.pi))
+        bd.line([(x, 0), (x, bar_h)], fill=(6, 15, 47, alpha))
+    img = Image.alpha_composite(img, bar_overlay)
+    draw = ImageDraw.Draw(img)
+
+    # 信息条上方渐变光带
+    for x in range(W):
+        t = x / W
+        r = int(0 + (123 - 0) * t)
+        g = int(217 + (97 - 217) * t)
+        b = int(255 + (247 - 255) * t)
+        draw.point((x, H - bar_h - 1), fill=(r, g, b, 180))
+
     # 底部文字
-    draw.text((60, H - bar_h + 15), "# " + date_str.replace("-", ""), fill=(200, 210, 230), font=font_bar)
+    draw.text((40, H - bar_h + 11), "# " + date_str.replace("-", ""), fill=(180, 200, 230, 200), font=font_bar)
     tags = "Technology · AI · Newsletter"
     tags_bbox = draw.textbbox((0, 0), tags, font=font_bar)
     tags_w = tags_bbox[2] - tags_bbox[0]
-    draw.text((W - tags_w - 60, H - bar_h + 15), tags, fill=(200, 210, 230), font=font_bar)
+    draw.text((W - tags_w - 40, H - bar_h + 11), tags, fill=(180, 200, 230, 200), font=font_bar)
 
-    # 保存
+    # ── 保存 ──
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     cover_path = OUTPUT_DIR / f"cover-{date_str}.png"
-    img.save(cover_path, "PNG")
+    img.convert("RGB").save(cover_path, "PNG")
     logger.info("封面图已生成: %s", cover_path)
     return cover_path
 
