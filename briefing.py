@@ -304,7 +304,7 @@ def build_prompt(articles: list[Article]) -> str:
    - 2～3 句简明摘要
    - 为什么重要
    - 一条可执行建议
-   - 来源链接
+   - 来源（仅显示来源名称，不显示链接）
 8. 最后给出"今日行动优先级"，包含 1～3 条具体行动。
 9. 使用中文，语气专业、直接、务实。
 10. 输出 Markdown，不使用代码块。
@@ -378,8 +378,11 @@ def convert_to_wechat_text(md_content: str, date_str: str) -> str:
     text = re.sub(r'```[\s\S]*?```', '', text)
     text = re.sub(r'`(.+?)`', r'\1', text)
 
-    # 链接 [text](url) -> text(url)
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1（\2）', text)
+    # 链接 [text](url) -> 只保留text，去掉url
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1', text)
+
+    # 去掉"来源："后残留的裸URL
+    text = re.sub(r'(来源[：:]\s*)https?://\S+', r'\1', text)
 
     # 去掉列表符号但保留缩进
     text = re.sub(r'^[\-\*]\s+', '  ', text, flags=re.MULTILINE)
@@ -667,8 +670,10 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
             })
         else:
             clean = stripped.replace("**", "").replace("*", "")
-            # 把 [text](url) 转为 text（url）纯文本，公众号粘贴可见
-            clean = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1（\2）", clean)
+            # 把 [text](url) 转为只保留text，去掉url
+            clean = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r"\1", clean)
+            # 去掉"来源："后残留的裸URL
+            clean = re.sub(r"(来源[：:]\s*)https?://\S+", r"\1", clean)
             children.append({
                 "type": "paragraph",
                 "paragraph": {"rich_text": [{"type": "text", "text": {"content": clean}}]},
