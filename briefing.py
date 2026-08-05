@@ -460,30 +460,7 @@ def generate_cover(content: str, date_str: str) -> Path | None:
         b = int(20 + (35 - 20) * y / H)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-    # 科技感几何装饰
-    # 右上角网格线
-    for i in range(0, 200, 25):
-        draw.line([(W - 200 + i, 0), (W, 200 - i)], fill=(25, 35, 50), width=1)
-    for i in range(0, 200, 25):
-        draw.line([(W, 0 + i), (W - 200 + i, 200)], fill=(25, 35, 50), width=1)
-
-    # 左下角三角形装饰
-    tri_color = (20, 30, 45)
-    draw.polygon([(0, H), (120, H), (0, H - 120)], fill=tri_color)
-    draw.polygon([(0, H), (80, H), (0, H - 80)], fill=(25, 40, 55))
-
-    # 右下角六边形装饰
-    cx, cy, r = W - 60, H - 60, 40
-    hex_pts = [(cx + r * 0.866 * (1 if i % 2 == 0 else -1), cy + r * 0.5 * i - r) for i in range(6)]
-    # 简化六边形
-    import math
-    hex_pts = []
-    for i in range(6):
-        angle = math.pi / 3 * i - math.pi / 6
-        hex_pts.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
-    draw.polygon(hex_pts, outline=(35, 50, 70), width=2)
-
-    # 顶部强调线（渐变色条）
+    # 科技感装饰：顶部渐变色条
     for x in range(40, W - 40):
         ratio = x / (W - 80)
         r2 = int(50 + (100 - 50) * ratio)
@@ -538,16 +515,27 @@ def generate_cover(content: str, date_str: str) -> Path | None:
         if len(titles) >= 5:
             break
 
-    # 绘制标题列表
+    # 绘制标题列表（自动换行）
     y = 175
+    max_chars_per_line = 38
     for i, title in enumerate(titles):
         # 编号方块
         bx, by = 40, y
         draw.rounded_rectangle([(bx, by), (bx + 28, by + 28)], radius=4, fill=(30, 50, 75), outline=(60, 100, 150), width=1)
         draw.text((bx + 8, by + 2), str(i + 1), fill=(100, 180, 255), font=font_num)
-        # 标题文字
-        draw.text((80, y + 4), title, fill=(210, 220, 235), font=font_item)
-        y += 55
+
+        # 标题自动换行
+        text_x = 80
+        text_y = y + 4
+        remaining = title
+        first_line = True
+        while remaining:
+            line_text = remaining[:max_chars_per_line]
+            remaining = remaining[max_chars_per_line:]
+            draw.text((text_x, text_y), line_text, fill=(210, 220, 235), font=font_item)
+            text_y += 24
+            first_line = False
+        y = text_y + 18
 
     # 底部标签
     draw.text((40, H - 35), "Top 5 Daily", fill=(60, 90, 120), font=font_sub)
