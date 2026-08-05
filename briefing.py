@@ -583,14 +583,14 @@ def generate_cover(content: str, date_str: str) -> Path | None:
 
     # ── 底部半透明信息条（玻璃拟态）──
     bar_h = 38
-    bar_overlay = Image.new("RGBA", (W, bar_h), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bar_overlay)
-    # 渐变半透明背景
+    bar_full = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bar_full)
+    # 渐变半透明背景（只画底部bar_h区域）
     for x in range(W):
         t = x / W
         alpha = int(80 + 40 * math.sin(t * math.pi))
-        bd.line([(x, 0), (x, bar_h)], fill=(6, 15, 47, alpha))
-    img = Image.alpha_composite(img, bar_overlay)
+        bd.line([(x, H - bar_h), (x, H)], fill=(6, 15, 47, alpha))
+    img = Image.alpha_composite(img, bar_full)
     draw = ImageDraw.Draw(img)
 
     # 信息条上方渐变光带
