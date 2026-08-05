@@ -601,20 +601,28 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
     resp.raise_for_status()
     page_id = resp.json().get("id")
 
-    # 上传封面图到GitHub，获取raw URL，设为Notion子页面cover
+    # 上传封面图到GitHub，获取raw URL，设为cover+插入image block
     if cover_path and os.path.exists(cover_path) and page_id:
         try:
             cover_url = upload_cover_to_github(cover_path, date_str)
             if cover_url:
+                # 设为子页面cover
                 requests.patch(
                     f"https://api.notion.com/v1/pages/{page_id}",
                     headers=headers,
                     json={"cover": {"type": "external", "external": {"url": cover_url}}},
                     timeout=15,
                 )
-                logger.info("封面图已设为Notion子页面cover: %s", cover_url)
+                # 在子页面内容顶部插入image block
+                requests.patch(
+                    f"https://api.notion.com/v1/blocks/{page_id}/children",
+                    headers=headers,
+                    json={"children": [{"type": "image", "image": {"type": "external", "external": {"url": cover_url}}}]},
+                    timeout=15,
+                )
+                logger.info("封面图已设为cover+插入image block: %s", cover_url)
         except Exception as exc:
-            logger.warning("封面cover设置异常: %s", exc)
+            logger.warning("封面设置异常: %s", exc)
 
     logger.info("简报已推送到Notion子页面: %s", date_str)
 
