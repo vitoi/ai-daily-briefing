@@ -460,20 +460,25 @@ def generate_cover(content: str, date_str: str) -> Path | None:
         b = int(49 + (80 - 49) * y / H)
         draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-    # 字体
+    # 字体（优先macOS，其次Linux中文字体）
     try:
         font_title = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 36)
         font_sub = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 18)
         font_item = ImageFont.truetype("/System/Library/Fonts/PingFang.ttc", 16)
     except Exception:
         try:
-            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
-            font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
-            font_item = font_sub
+            font_title = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 36)
+            font_sub = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 18)
+            font_item = ImageFont.truetype("/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc", 16)
         except Exception:
-            font_title = ImageFont.load_default()
-            font_sub = font_title
-            font_item = font_title
+            try:
+                font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 32)
+                font_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+                font_item = font_sub
+            except Exception:
+                font_title = ImageFont.load_default()
+                font_sub = font_title
+                font_item = font_title
 
     # 标题
     draw.text((40, 30), "AI简报 " + date_str, fill=(100, 200, 255), font=font_title)
