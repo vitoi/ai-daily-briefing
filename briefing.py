@@ -694,13 +694,25 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
         "children": batch,
     }
 
-    resp = requests.post(
-        "https://api.notion.com/v1/pages",
-        headers=headers,
-        json=page_data,
-        timeout=30,
-    )
-    resp.raise_for_status()
+    # 创建子页面（带重试，应对网络抖动）
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                "https://api.notion.com/v1/pages",
+                headers=headers,
+                json=page_data,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            if attempt < 2:
+                logger.warning("Notion推送第%d次失败，10秒后重试: %s", attempt + 1, e)
+                import time
+                time.sleep(10)
+            else:
+                logger.error("Notion推送3次重试均失败: %s", e)
+                raise
     page_id = resp.json().get("id")
 
     # 上传封面图到GitHub，获取raw URL，设为cover+插入image block
