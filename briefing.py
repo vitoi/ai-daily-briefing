@@ -630,6 +630,31 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
         "Content-Type": "application/json",
     }
 
+    # 去重：检查是否已存在同日期的子页面
+    page_title = f"AI简报 {date_str}"
+    try:
+        search_resp = requests.post(
+            "https://api.notion.com/v1/search",
+            headers=headers,
+            json={
+                "query": page_title,
+                "filter": {
+                    "value": "page",
+                    "property": "object",
+                },
+            },
+            timeout=15,
+        )
+        search_resp.raise_for_status()
+        search_data = search_resp.json()
+        existing = [r for r in search_data.get("results", []) 
+                     if r.get("properties", {}).get("title", {}).get("title", [{}])[0].get("text", {}).get("content", "") == page_title]
+        if existing:
+            logger.info("Notion子页面已存在，跳过: %s", page_title)
+            return
+    except Exception as e:
+        logger.warning("去重检查失败（继续创建）: %s", e)
+
     # 构建简报内容blocks
     children = []
     lines = content.strip().split("\n")
