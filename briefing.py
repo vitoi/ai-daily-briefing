@@ -728,7 +728,11 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
                 json=page_data,
                 timeout=30,
             )
-            resp.raise_for_status()
+            data = resp.json()
+            page_url = data.get("url", "")
+            page_id = data.get("id", "")
+            logger.info("Notion子页面创建成功: id=%s url=%s", page_id, page_url)
+            logger.info("简报已推送到Notion子页面: %s", date_str)
             break
         except requests.exceptions.RequestException as e:
             if attempt < 2:
