@@ -50,6 +50,12 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
+# Evernote 邮件推送
+EVERNOTE_EMAIL = os.getenv("EVERNOTE_EMAIL", "").strip()
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.163.com").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASS = os.getenv("SMTP_PASS", "").strip()
 NOTION_PAGE_ID = os.getenv("NOTION_PAGE_ID", "3b26c7e3-f2b1-8039-a9fc-c882801b5819").strip()
 
 DEFAULT_FEEDS = [
@@ -446,6 +452,37 @@ def post_webhook(content: str) -> None:
     logger.info("简报已发送到 Webhook")
 
 
+def post_evernote(content: str, date_str: str) -> None:
+    """通过邮件将简报推送到 Evernote（印象笔记）"""
+    if not EVERNOTE_EMAIL or not SMTP_USER or not SMTP_PASS:
+        logger.info("Evernote 邮件推送未配置，跳过")
+        return
+
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    subject = f"AI简报 {date_str}"
+    msg = MIMEMultipart("alternative")
+    msg["From"] = SMTP_USER
+    msg["To"] = EVERNOTE_EMAIL
+    msg["Subject"] = subject
+
+    # 纯文本版本
+    msg.attach(MIMEText(content, "plain", "utf-8"))
+    # 简单 HTML 版本（<pre>保留 markdown 原文排版）
+    html_body = f"<html><body><pre style='white-space: pre-wrap; font-family: monospace;'>{content}</pre></body></html>"
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, [EVERNOTE_EMAIL], msg.as_string())
+        logger.info("简报已通过邮件发送到 Evernote: %s", EVERNOTE_EMAIL)
+    except Exception as exc:
+        logger.error("Evernote 邮件推送失败: %s", exc)
+
+
 
 
 def upload_cover_to_github(cover_path, date_str: str) -> str | None:
@@ -820,6 +857,7 @@ def main() -> int:
         cover_path = generate_cover(briefing, date_str)
         post_webhook(briefing)
         post_notion(briefing, date_str, cover_path)
+        post_evernote(briefing, date_str)
 
         print(f"\n生成成功：{path.resolve()}\n")
         print(briefing)
