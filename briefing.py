@@ -452,6 +452,71 @@ def post_webhook(content: str) -> None:
     logger.info("简报已发送到 Webhook")
 
 
+def _markdown_to_html(text: str) -> str:
+    """简易 markdown 转 HTML（不引入第三方依赖）"""
+    import re as _re
+
+    lines = text.split("\n")
+    html_lines = []
+    in_list = False
+
+    for line in lines:
+        # 标题 ### / ## / #
+        m = _re.match(r'^(#{1,3})\s+(.+)', line)
+        if m:
+            if in_list:
+                html_lines.append("</ul>")
+                in_list = False
+            level = len(m.group(1))
+            html_lines.append(f"<h{level}>{m.group(2)}</h{level}>")
+            continue
+
+        # 有序列表 1. 2.
+        m = _re.match(r'^\d+\.\s+(.+)', line)
+        if m:
+            if not in_list:
+                html_lines.append("<ul>")
+                in_list = True
+            html_lines.append(f"<li>{m.group(1)}</li>")
+            continue
+
+        # 无序列表 - 或 *
+        m = _re.match(r'^[-*]\s+(.+)', line)
+        if m:
+            if not in_list:
+                html_lines.append("<ul>")
+                in_list = True
+            html_lines.append(f"<li>{m.group(1)}</li>")
+            continue
+
+        if in_list:
+            html_lines.append("</ul>")
+            in_list = False
+
+        # 分隔线 ---
+        if _re.match(r'^-{3,}\s*$', line):
+            html_lines.append("<hr>")
+            continue
+
+        # 空行跳过
+        if not line.strip():
+            continue
+
+        # 普通段落
+        html_lines.append(f"<p>{line}</p>")
+
+    if in_list:
+        html_lines.append("</ul>")
+
+    body = "\n".join(html_lines)
+    # 行内格式：**bold** → <strong>
+    body = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', body)
+    # 行内代码 `code` → <code>
+    body = _re.sub(r'`(.+?)`', r'<code>\1</code>', body)
+
+    return body
+
+
 def post_evernote(content: str, date_str: str) -> None:
     """通过邮件将简报推送到 Evernote（印象笔记）"""
     if not EVERNOTE_EMAIL or not SMTP_USER or not SMTP_PASS:
@@ -468,10 +533,15 @@ def post_evernote(content: str, date_str: str) -> None:
     msg["To"] = EVERNOTE_EMAIL
     msg["Subject"] = subject
 
-    # 纯文本版本
-    msg.attach(MIMEText(content, "plain", "utf-8"))
-    # 简单 HTML 版本（<pre>保留 markdown 原文排版）
-    html_body = f"<html><body><pre style='white-space: pre-wrap; font-family: monospace;'>{content}</pre></body></html>"
+    # 纯文本版本（去掉 markdown 符号，方便纯文本阅读）
+    import re as _re
+    plain = content
+    plain = _re.sub(r'\*\*(.+?)\*\*', r'\1', plain)
+    plain = _re.sub(r'`(.+?)`', r'\1', plain)
+    plain = _re.sub(r'^#{1,3}\s+', '', plain, flags=_re.MULTILINE)
+    msg.attach(MIMEText(plain, "plain", "utf-8"))
+    # HTML 版本（markdown 转换为正常排版）
+    html_body = f"<html><body style='font-family: -apple-system, sans-serif; line-height: 1.8;'>{_markdown_to_html(content)}</body></html>"
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
