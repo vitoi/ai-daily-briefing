@@ -326,6 +326,7 @@ def call_llm(prompt: str) -> str:
     body = {
         "model": LLM_MODEL,
         "temperature": 0.2,
+        "max_tokens": 8192,
         "messages": [
             {
                 "role": "system",
@@ -340,7 +341,17 @@ def call_llm(prompt: str) -> str:
     data = response.json()
 
     try:
-        return data["choices"][0]["message"]["content"].strip()
+        choice = data["choices"][0]
+        finish_reason = choice.get("finish_reason", "")
+        content = choice["message"]["content"]
+        if content is None:
+            raise RuntimeError(
+                f"模型返回content为null，finish_reason={finish_reason}，"
+                f"token用量={data.get('usage', {})}，"
+                f"可能原因: reasoning token耗尽max_tokens限制，"
+                f"请增大max_tokens或减少候选新闻数量"
+            )
+        return content.strip()
     except Exception as exc:
         raise RuntimeError(f"无法解析模型响应: {data}") from exc
 
