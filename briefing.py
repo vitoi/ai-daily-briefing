@@ -46,6 +46,8 @@ TOP_N = int(os.getenv("TOP_N", "5"))
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
+# 备选模型列表：主模型失败时按顺序重试（逗号分隔）
+LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
 NOTION_PAGE_ID = os.getenv("NOTION_PAGE_ID", "3b26c7e3-f2b1-8039-a9fc-c882801b5819").strip()
@@ -314,17 +316,15 @@ def build_prompt(articles: list[Article]) -> str:
 """.strip()
 
 
-def call_llm(prompt: str) -> str:
-    if not LLM_API_KEY:
-        raise RuntimeError("缺少 LLM_API_KEY，请先复制 .env.example 为 .env 并填写。")
-
+def _call_llm_single(model: str, prompt: str) -> str:
+    """调用单个模型生成简报，失败时抛异常。"""
     url = f"{LLM_BASE_URL}/chat/completions"
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
         "Content-Type": "application/json",
     }
     body = {
-        "model": LLM_MODEL,
+        "model": model,
         "temperature": 0.2,
         "max_tokens": 8192,
         "messages": [
@@ -346,14 +346,39 @@ def call_llm(prompt: str) -> str:
         content = choice["message"]["content"]
         if content is None:
             raise RuntimeError(
-                f"模型返回content为null，finish_reason={finish_reason}，"
+                f"模型 {model} 返回content为null，finish_reason={finish_reason}，"
                 f"token用量={data.get('usage', {})}，"
-                f"可能原因: reasoning token耗尽max_tokens限制，"
-                f"请增大max_tokens或减少候选新闻数量"
+                f"可能原因: reasoning token耗尽max_tokens限制"
             )
         return content.strip()
     except Exception as exc:
-        raise RuntimeError(f"无法解析模型响应: {data}") from exc
+        raise RuntimeError(f"无法解析模型 {model} 响应: {data}") from exc
+
+
+def call_llm(prompt: str) -> str:
+    """调用LLM生成简报，主模型失败时按备选列表依次重试。"""
+    if not LLM_API_KEY:
+        raise RuntimeError("缺少 LLM_API_KEY，请先复制 .env.example 为 .env 并填写。")
+
+    # 主模型 + 备选模型列表
+    models = [LLM_MODEL] + LLM_FALLBACK_MODELS
+    last_error = None
+
+    for i, model in enumerate(models):
+        try:
+            result = _call_llm_single(model, prompt)
+            if i > 0:
+                logger.info("主模型 %s 失败，已用备选模型 %s 生成", LLM_MODEL, model)
+            return result
+        except Exception as exc:
+            last_error = exc
+            if i < len(models) - 1:
+                next_model = models[i + 1]
+                logger.warning("模型 %s 失败: %s，切换到备选模型 %s", model, exc, next_model)
+            else:
+                logger.error("所有模型均失败，最后错误: %s", exc)
+
+    raise RuntimeError(f"所有模型均失败，最后错误: {last_error}")
 
 
 def save_markdown(content: str) -> Path:
