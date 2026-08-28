@@ -50,8 +50,8 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
-# Evernote 邮件推送
-EVERNOTE_EMAIL = os.getenv("EVERNOTE_EMAIL", "").strip()
+# 邮件推送（通过SMTP发简报到邮箱）
+EMAIL_TO = os.getenv("EMAIL_TO", "").strip()
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.163.com").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
@@ -517,10 +517,10 @@ def _markdown_to_html(text: str) -> str:
     return body
 
 
-def post_evernote(content: str, date_str: str) -> None:
-    """通过邮件将简报推送到 Evernote（印象笔记）"""
-    if not EVERNOTE_EMAIL or not SMTP_USER or not SMTP_PASS:
-        logger.info("Evernote 邮件推送未配置，跳过")
+def post_evernote(content: str, date_str: str, cover_url: str | None = None) -> None:
+    """通过邮件将简报推送到指定邮箱"""
+    if not EMAIL_TO or not SMTP_USER or not SMTP_PASS:
+        logger.info("邮件推送未配置，跳过")
         return
 
     import smtplib
@@ -530,7 +530,7 @@ def post_evernote(content: str, date_str: str) -> None:
     subject = f"AI简报 {date_str}"
     msg = MIMEMultipart("alternative")
     msg["From"] = SMTP_USER
-    msg["To"] = EVERNOTE_EMAIL
+    msg["To"] = EMAIL_TO
     msg["Subject"] = subject
 
     # 纯文本版本（去掉 markdown 符号，方便纯文本阅读）
@@ -540,17 +540,20 @@ def post_evernote(content: str, date_str: str) -> None:
     plain = _re.sub(r'`(.+?)`', r'\1', plain)
     plain = _re.sub(r'^#{1,3}\s+', '', plain, flags=_re.MULTILINE)
     msg.attach(MIMEText(plain, "plain", "utf-8"))
-    # HTML 版本（markdown 转换为正常排版）
-    html_body = f"<html><body style='font-family: -apple-system, sans-serif; line-height: 1.8;'>{_markdown_to_html(content)}</body></html>"
+    # HTML 版本（markdown 转换为正常排版，封面图嵌入顶部）
+    html_inner = _markdown_to_html(content)
+    if cover_url:
+        html_inner = f"<div style='text-align:center;margin-bottom:20px;'><img src='{cover_url}' alt='封面图' style='max-width:100%;border-radius:8px;' /></div>\n" + html_inner
+    html_body = f"<html><body style='font-family: -apple-system, sans-serif; line-height: 1.8; max-width: 720px; margin: 0 auto;'>{html_inner}</body></html>"
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
             server.login(SMTP_USER, SMTP_PASS)
-            server.sendmail(SMTP_USER, [EVERNOTE_EMAIL], msg.as_string())
-        logger.info("简报已通过邮件发送到 Evernote: %s", EVERNOTE_EMAIL)
+            server.sendmail(SMTP_USER, [EMAIL_TO], msg.as_string())
+        logger.info("简报已通过邮件发送: %s", EMAIL_TO)
     except Exception as exc:
-        logger.error("Evernote 邮件推送失败: %s", exc)
+        logger.error("邮件推送失败: %s", exc)
 
 
 
@@ -762,7 +765,7 @@ def generate_cover(content: str, date_str: str) -> Path | None:
     return cover_path
 
 
-def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> None:
+def post_notion(content: str, date_str: str, cover_path: Path | None = None, cover_url: str | None = None) -> None:
     """在Notion主页面顶部创建带日期的子页面，简报内容放入子页面"""
     if not NOTION_TOKEN:
         return
@@ -888,25 +891,29 @@ def post_notion(content: str, date_str: str, cover_path: Path | None = None) -> 
     page_id = resp.json().get("id")
 
     # 上传封面图到GitHub，获取raw URL，设为cover+插入image block
-    if cover_path and os.path.exists(cover_path) and page_id:
+    # 如果调用方已上传过（cover_url），直接复用，避免重复上传
+    if cover_url is None and cover_path and os.path.exists(cover_path) and page_id:
         try:
             cover_url = upload_cover_to_github(cover_path, date_str)
-            if cover_url:
-                # 设为子页面cover
-                requests.patch(
-                    f"https://api.notion.com/v1/pages/{page_id}",
-                    headers=headers,
-                    json={"cover": {"type": "external", "external": {"url": cover_url}}},
-                    timeout=15,
-                )
-                # 在子页面内容顶部插入image block
-                requests.patch(
-                    f"https://api.notion.com/v1/blocks/{page_id}/children",
-                    headers=headers,
-                    json={"children": [{"type": "image", "image": {"type": "external", "external": {"url": cover_url}}}]},
-                    timeout=15,
-                )
-                logger.info("封面图已设为cover+插入image block: %s", cover_url)
+        except Exception as exc:
+            logger.warning("封面上传异常: %s", exc)
+    if cover_url and page_id:
+        try:
+            # 设为子页面cover
+            requests.patch(
+                f"https://api.notion.com/v1/pages/{page_id}",
+                headers=headers,
+                json={"cover": {"type": "external", "external": {"url": cover_url}}},
+                timeout=15,
+            )
+            # 在子页面内容顶部插入image block
+            requests.patch(
+                f"https://api.notion.com/v1/blocks/{page_id}/children",
+                headers=headers,
+                json={"children": [{"type": "image", "image": {"type": "external", "external": {"url": cover_url}}}]},
+                timeout=15,
+            )
+            logger.info("封面图已设为cover+插入image block: %s", cover_url)
         except Exception as exc:
             logger.warning("封面设置异常: %s", exc)
 
@@ -925,9 +932,13 @@ def main() -> int:
         path = save_markdown(briefing)
         date_str = datetime.now().strftime("%Y-%m-%d")
         cover_path = generate_cover(briefing, date_str)
+        # 封面上传到GitHub，拿到URL供Notion和Evernote使用
+        cover_url = None
+        if cover_path:
+            cover_url = upload_cover_to_github(cover_path, date_str)
         post_webhook(briefing)
-        post_notion(briefing, date_str, cover_path)
-        post_evernote(briefing, date_str)
+        post_notion(briefing, date_str, cover_path, cover_url)
+        post_evernote(briefing, date_str, cover_url)
 
         print(f"\n生成成功：{path.resolve()}\n")
         print(briefing)
