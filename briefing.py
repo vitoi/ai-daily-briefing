@@ -66,9 +66,9 @@ DEFAULT_FEEDS = [
     ("Ars Technica AI", "https://feeds.arstechnica.com/arstechnica/features", 5),
     ("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", 5),
     ("AI News (The Decoder)", "https://the-decoder.com/feed/", 5),
-    ("ZDNet AI", "https://www.zdnet.com/topic/artificial-intelligence/rss.xml", 4),
+    ("MarkTechPost", "https://marktechpost.com/feed/", 4),
     ("AI Business", "https://aibusiness.com/feed", 4),
-    ("VentureBeat Generative AI", "https://venturebeat.com/category/generative-ai/feed/", 4),
+    ("Google AI Blog", "https://blog.google/technology/ai/rss/", 4),
 ]
 
 # HTTP 请求超时（秒）
@@ -356,7 +356,17 @@ def _call_llm_single(model: str, prompt: str) -> str:
                 f"token用量={data.get('usage', {})}，"
                 f"可能原因: reasoning token耗尽max_tokens限制"
             )
-        return content.strip()
+        content = content.strip()
+        # 检查是否被截断（finish_reason=length 表示 token 上限用尽）
+        if finish_reason == "length":
+            raise RuntimeError(
+                f"模型 {model} 返回被截断(finish_reason=length)，"
+                f"token用量={data.get('usage', {})}，"
+                f"内容长度={len(content)}，需要增大max_tokens或减少输入"
+            )
+        return content
+    except RuntimeError:
+        raise
     except Exception as exc:
         raise RuntimeError(f"无法解析模型 {model} 响应: {data}") from exc
 
@@ -373,8 +383,17 @@ def call_llm(prompt: str) -> str:
     for i, model in enumerate(models):
         try:
             result = _call_llm_single(model, prompt)
+            # 校验输出质量：至少 3 条新闻（### 标题）
+            import re as _re
+            news_count = len(_re.findall(r'^##\s+\d+\.', result, _re.MULTILINE))
+            if news_count < 3:
+                raise RuntimeError(
+                    f"模型 {model} 输出仅 {news_count} 条新闻（要求{TOP_N}条），"
+                    f"内容长度={len(result)}，可能被截断或质量不足"
+                )
             if i > 0:
                 logger.info("主模型 %s 失败，已用备选模型 %s 生成", LLM_MODEL, model)
+            logger.info("模型 %s 输出 %d 条新闻，内容长度 %d 字符", model, news_count, len(result))
             return result
         except Exception as exc:
             last_error = exc
