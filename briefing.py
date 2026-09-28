@@ -49,6 +49,9 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4.1-mini")
 # 备选模型列表：主模型失败时按顺序重试（逗号分隔）
 LLM_FALLBACK_MODELS = [m.strip() for m in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if m.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip()
+# 钉钉群机器人 Webhook（国内直连，无需梯子）
+DINGTALK_WEBHOOK_URL = os.getenv("DINGTALK_WEBHOOK_URL", "").strip()
+DINGTALK_SECRET = os.getenv("DINGTALK_SECRET", "").strip()
 NOTION_TOKEN = os.getenv("NOTION_TOKEN", "").strip()
 # 邮件推送（通过SMTP发简报到邮箱）
 EMAIL_TO = os.getenv("EMAIL_TO", "").strip()
@@ -458,10 +461,17 @@ def convert_to_wechat_text(md_content: str, date_str: str) -> str:
 
 
 def post_webhook(content: str) -> None:
+    """发送简报到 Webhook。
+
+    优先使用钉钉机器人（支持签名校验 + markdown 富文本 + 自动分段）。
+    若未配置钉钉，回退到通用 WEBHOOK_URL（发送 JSON {"text": content}）。
+    """
+    if DINGTALK_WEBHOOK_URL:
+        _post_dingtalk(content)
+        return
     if not WEBHOOK_URL:
         return
-
-    # 默认发送通用 JSON；企业微信/飞书/Slack 可通过网关适配。
+    # 通用 Webhook（企业微信/Slack 等）
     response = requests.post(
         WEBHOOK_URL,
         json={"text": content},
@@ -469,6 +479,90 @@ def post_webhook(content: str) -> None:
     )
     response.raise_for_status()
     logger.info("简报已发送到 Webhook")
+
+
+def _post_dingtalk(content: str) -> None:
+    """发送简报到钉钉群机器人，支持签名校验和 markdown 消息分段。
+
+    钉钉 markdown 消息限制 5000 字符（含格式标记），超出自动分段发送。
+    签名算法：HMAC-SHA256(timestamp + "\\n" + secret) → base64 → URL编码。
+    """
+    import hashlib
+    import hmac
+    import base64
+    import urllib.parse
+    import time as _time
+
+    ts = str(round(_time.time() * 1000))
+    url = DINGTALK_WEBHOOK_URL
+
+    # 签名校验
+    if DINGTALK_SECRET:
+        string_to_sign = f"{ts}\n{DINGTALK_SECRET}"
+        hmac_code = hmac.new(
+            DINGTALK_SECRET.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+        sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+        # 钉钉 webhook URL 已带 access_token 参数，用 & 追加
+        url = f"{DINGTALK_WEBHOOK_URL}&timestamp={ts}&sign={sign}"
+
+    # 按新闻条目分段（每条 ### N. 作为一个 chunk）
+    sections = _split_briefing_sections(content)
+    total = len(sections)
+    for i, section in enumerate(sections, 1):
+        title_prefix = f"AI简报 {datetime.now().strftime('%Y-%m-%d')}"
+        if total > 1:
+            title_prefix += f"（{i}/{total}）"
+
+        # 钉钉 markdown 格式: {"title": ..., "text": ...}
+        payload = {
+            "msgtype": "markdown",
+            "markdown": {
+                "title": title_prefix,
+                "text": f"## {title_prefix}\n\n{section}",
+            },
+        }
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get("errcode") != 0:
+            logger.error("钉钉推送失败(段 %d/%d): %s", i, total, result)
+        else:
+            logger.info("钉钉推送成功(段 %d/%d)", i, total)
+
+        # 多段之间间隔 500ms，避免频率限制
+        if total > 1 and i < total:
+            _time.sleep(0.5)
+
+
+def _split_briefing_sections(content: str) -> list[str]:
+    """将简报按 ### 标题分段，每段控制在 4500 字符以内（留余量给格式标记）。
+
+    钉钉 markdown 消息上限 5000 字符。单条简报约 5000-6000 字符，
+    通常分 2 段即可。
+    """
+    import re as _re
+
+    # 按 ### N. 分割
+    parts = _re.split(r'(?=^###\s+\d+\.)', content, flags=_re.MULTILINE)
+    # 去掉开头的前言部分（### 之前的内容）
+    sections = []
+    current = ""
+    for part in parts:
+        if not part.strip():
+            continue
+        # 如果当前段 + 新部分超过 4500 字符，先提交当前段
+        if current and len(current) + len(part) > 4500:
+            sections.append(current.strip())
+            current = part
+        else:
+            current += part
+    if current.strip():
+        sections.append(current.strip())
+
+    return sections if sections else [content]
 
 
 def _markdown_to_html(text: str) -> str:
