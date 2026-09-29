@@ -733,6 +733,42 @@ def upload_cover_to_github(cover_path, date_str: str) -> str | None:
         return None
 
 
+def upload_cover_to_gitee(cover_path, date_str: str) -> str | None:
+    """上传封面图到Gitee仓库，返回raw URL（国内直连，无需梯子）"""
+    import base64
+    gitee_token = os.getenv("GITEE_TOKEN", "").strip()
+    if not gitee_token:
+        logger.warning("GITEE_TOKEN 未配置，跳过Gitee封面上传")
+        return None
+
+    owner = os.getenv("GITEE_OWNER", "vitoi")
+    repo = os.getenv("GITEE_REPO", "ai-daily-briefing-assets")
+    branch = os.getenv("GITEE_BRANCH", "master")
+    path_in_repo = f"cover-{date_str}-{int(time.time())}.png"
+
+    with open(cover_path, "rb") as f:
+        content_b64 = base64.b64encode(f.read()).decode()
+
+    url = f"https://gitee.com/api/v5/repos/{owner}/{repo}/contents/{path_in_repo}"
+    resp = requests.post(
+        url,
+        data={
+            "access_token": gitee_token,
+            "content": content_b64,
+            "message": f"cover {date_str}",
+            "branch": branch,
+        },
+        timeout=30,
+    )
+    if resp.status_code in (200, 201):
+        raw_url = f"https://gitee.com/{owner}/{repo}/raw/{branch}/{path_in_repo}"
+        logger.info("封面图已上传Gitee: %s", raw_url)
+        return raw_url
+    else:
+        logger.warning("Gitee上传失败: %s", resp.text[:200])
+        return None
+
+
 def generate_cover(content: str, date_str: str) -> Path | None:
     """生成封面图（AI Intelligence Hub风格 - 深蓝背景+AI Core发光球体+网格粒子+底部信息条）"""
     try:
@@ -1072,7 +1108,10 @@ def main() -> int:
         # 封面上传到GitHub，拿到URL供Notion和Evernote使用
         cover_url = None
         if cover_path:
-            cover_url = upload_cover_to_github(cover_path, date_str)
+            # 优先 Gitee（国内直连），失败回退 GitHub
+            cover_url = upload_cover_to_gitee(cover_path, date_str)
+            if not cover_url:
+                cover_url = upload_cover_to_github(cover_path, date_str)
         post_webhook(briefing, cover_url)
         post_notion(briefing, date_str, cover_path, cover_url)
         post_evernote(briefing, date_str, cover_url)
