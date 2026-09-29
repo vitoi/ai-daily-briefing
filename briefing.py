@@ -512,25 +512,7 @@ def _post_dingtalk(content: str, cover_url: str | None = None) -> None:
 
     date_str = datetime.now().strftime("%Y-%m-%d")
 
-    # 第 1 条：封面图（actionCard 类型，纯展示图片，不设跳转）
-    if cover_url:
-        cover_payload = {
-            "msgtype": "markdown",
-            "markdown": {
-                "title": f"AI简报 {date_str} - 封面",
-                "text": f"![AI简报 {date_str} 封面图]({cover_url})",
-            },
-        }
-        resp = requests.post(url, json=cover_payload, timeout=30)
-        resp.raise_for_status()
-        result = resp.json()
-        if result.get("errcode") != 0:
-            logger.error("钉钉封面图推送失败: %s", result)
-        else:
-            logger.info("钉钉封面图推送成功")
-        _time.sleep(0.5)  # 间隔避免频率限制
-
-    # 第 2+ 条：简报正文（markdown 类型，自动分段）
+    # 简报正文分段，封面图插入第一段开头
     sections = _split_briefing_sections(content)
     total = len(sections)
     for i, section in enumerate(sections, 1):
@@ -538,12 +520,18 @@ def _post_dingtalk(content: str, cover_url: str | None = None) -> None:
         if total > 1:
             title_prefix += f"（{i}/{total}）"
 
+        # 第一段插入封面图
+        text_body = f"## {title_prefix}\n\n"
+        if i == 1 and cover_url:
+            text_body += f"![AI简报 {date_str} 封面图]({cover_url})\n\n"
+        text_body += section
+
         # 钉钉 markdown 格式: {"title": ..., "text": ...}
         payload = {
             "msgtype": "markdown",
             "markdown": {
                 "title": title_prefix,
-                "text": f"## {title_prefix}\n\n{section}",
+                "text": text_body,
             },
         }
         resp = requests.post(url, json=payload, timeout=30)
