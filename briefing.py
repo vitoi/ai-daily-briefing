@@ -460,14 +460,14 @@ def convert_to_wechat_text(md_content: str, date_str: str) -> str:
     return header + text.strip() + "\n"
 
 
-def post_webhook(content: str) -> None:
+def post_webhook(content: str, cover_url: str | None = None) -> None:
     """发送简报到 Webhook。
 
-    优先使用钉钉机器人（支持签名校验 + markdown 富文本 + 自动分段）。
+    优先使用钉钉机器人（支持签名校验 + markdown 富文本 + 封面图 + 自动分段）。
     若未配置钉钉，回退到通用 WEBHOOK_URL（发送 JSON {"text": content}）。
     """
     if DINGTALK_WEBHOOK_URL:
-        _post_dingtalk(content)
+        _post_dingtalk(content, cover_url)
         return
     if not WEBHOOK_URL:
         return
@@ -481,10 +481,11 @@ def post_webhook(content: str) -> None:
     logger.info("简报已发送到 Webhook")
 
 
-def _post_dingtalk(content: str) -> None:
-    """发送简报到钉钉群机器人，支持签名校验和 markdown 消息分段。
+def _post_dingtalk(content: str, cover_url: str | None = None) -> None:
+    """发送简报到钉钉群机器人，支持签名校验、封面图和 markdown 消息分段。
 
     钉钉 markdown 消息限制 5000 字符（含格式标记），超出自动分段发送。
+    封面图通过独立 actionCard 消息发送（钉钉 markdown 不渲染图片，需用 actionCard）。
     签名算法：HMAC-SHA256(timestamp + "\\n" + secret) → base64 → URL编码。
     """
     import hashlib
@@ -494,7 +495,7 @@ def _post_dingtalk(content: str) -> None:
     import time as _time
 
     ts = str(round(_time.time() * 1000))
-    url = DINGTALK_WEBHOOK_URL
+    base_url = DINGTALK_WEBHOOK_URL
 
     # 签名校验
     if DINGTALK_SECRET:
@@ -505,14 +506,37 @@ def _post_dingtalk(content: str) -> None:
             digestmod=hashlib.sha256,
         ).digest()
         sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-        # 钉钉 webhook URL 已带 access_token 参数，用 & 追加
         url = f"{DINGTALK_WEBHOOK_URL}&timestamp={ts}&sign={sign}"
+    else:
+        url = base_url
 
-    # 按新闻条目分段（每条 ### N. 作为一个 chunk）
+    date_str = datetime.now().strftime("%Y-%m-%d")
+
+    # 第 1 条：封面图（actionCard 类型，支持图片显示）
+    if cover_url:
+        cover_payload = {
+            "msgtype": "actionCard",
+            "actionCard": {
+                "title": f"AI简报 {date_str} - 封面",
+                "text": f"![AI简报 {date_str} 封面图]({cover_url})",
+                "singleTitle": "查看完整简报",
+                "singleURL": cover_url,
+            },
+        }
+        resp = requests.post(url, json=cover_payload, timeout=30)
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get("errcode") != 0:
+            logger.error("钉钉封面图推送失败: %s", result)
+        else:
+            logger.info("钉钉封面图推送成功")
+        _time.sleep(0.5)  # 间隔避免频率限制
+
+    # 第 2+ 条：简报正文（markdown 类型，自动分段）
     sections = _split_briefing_sections(content)
     total = len(sections)
     for i, section in enumerate(sections, 1):
-        title_prefix = f"AI简报 {datetime.now().strftime('%Y-%m-%d')}"
+        title_prefix = f"AI简报 {date_str}"
         if total > 1:
             title_prefix += f"（{i}/{total}）"
 
@@ -1049,7 +1073,7 @@ def main() -> int:
         cover_url = None
         if cover_path:
             cover_url = upload_cover_to_github(cover_path, date_str)
-        post_webhook(briefing)
+        post_webhook(briefing, cover_url)
         post_notion(briefing, date_str, cover_path, cover_url)
         post_evernote(briefing, date_str, cover_url)
 
