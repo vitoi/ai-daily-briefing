@@ -512,15 +512,13 @@ def _post_dingtalk(content: str, cover_url: str | None = None) -> None:
 
     date_str = datetime.now().strftime("%Y-%m-%d")
 
-    # 第 1 条：封面图（actionCard 类型，支持图片显示）
+    # 第 1 条：封面图（actionCard 类型，纯展示图片，不设跳转）
     if cover_url:
         cover_payload = {
-            "msgtype": "actionCard",
-            "actionCard": {
+            "msgtype": "markdown",
+            "markdown": {
                 "title": f"AI简报 {date_str} - 封面",
                 "text": f"![AI简报 {date_str} 封面图]({cover_url})",
-                "singleTitle": "查看完整简报",
-                "singleURL": cover_url,
             },
         }
         resp = requests.post(url, json=cover_payload, timeout=30)
