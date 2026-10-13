@@ -72,6 +72,12 @@ DEFAULT_FEEDS = [
     ("MarkTechPost", "https://marktechpost.com/feed/", 4),
     ("AI Business", "https://aibusiness.com/feed", 4),
     ("Google AI Blog", "https://blog.google/technology/ai/rss/", 4),
+    # 中文源（从 ai_digest 合并，2026-10-13）
+    ("Google News 人工智能", "https://news.google.com/rss/search?q=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", 4),
+    ("少数派", "https://sspai.com/feed", 3),
+    ("极客公园", "https://www.geekpark.net/rss", 3),
+    ("爱范儿", "https://www.ifanr.com/feed/", 3),
+    ("36氪", "https://36kr.com/feed", 3),
 ]
 
 # HTTP 请求超时（秒）
@@ -114,6 +120,23 @@ KEYWORDS = {
     "compute": 4,
     "copyright": 4,
     "enterprise": 3,
+    # 中文关键词（从 ai_digest 合并中文源后补充，2026-10-13）
+    "人工智能": 6,
+    "大模型": 6,
+    "大语言模型": 8,
+    "生成式": 6,
+    "智能体": 5,
+    "开源": 4,
+    "开源权重": 5,
+    "多模态": 5,
+    "推理": 5,
+    "基准测试": 4,
+    "安全": 5,
+    "监管": 5,
+    "芯片": 4,
+    "算力": 4,
+    "数据中心": 4,
+    "企业级": 3,
 }
 
 @dataclass
