@@ -358,7 +358,7 @@ def _call_llm_single(model: str, prompt: str) -> str:
     body = {
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 8192,
+        "max_tokens": 16384,
         "messages": [
             {
                 "role": "system",
@@ -398,38 +398,51 @@ def _call_llm_single(model: str, prompt: str) -> str:
 
 
 def call_llm(prompt: str) -> str:
-    """调用LLM生成简报，主模型失败时按备选列表依次重试。"""
+    """调用LLM生成简报，主模型失败时按备选列表依次重试。
+    
+    所有模型失败后等 5 分钟再试一轮，最多重试 2 轮。
+    用于应对 litellm 网关短时故障（如 08:00 高峰期全超时）。
+    """
     if not LLM_API_KEY:
         raise RuntimeError("缺少 LLM_API_KEY，请先复制 .env.example 为 .env 并填写。")
 
-    # 主模型 + 备选模型列表
     models = [LLM_MODEL] + LLM_FALLBACK_MODELS
     last_error = None
+    max_rounds = 3  # 首轮 + 2 轮重试
 
-    for i, model in enumerate(models):
-        try:
-            result = _call_llm_single(model, prompt)
-            # 校验输出质量：至少 3 条新闻（### 标题）
-            import re as _re
-            news_count = len(_re.findall(r'^##\s+\d+\.', result, _re.MULTILINE))
-            if news_count < 3:
-                raise RuntimeError(
-                    f"模型 {model} 输出仅 {news_count} 条新闻（要求{TOP_N}条），"
-                    f"内容长度={len(result)}，可能被截断或质量不足"
-                )
-            if i > 0:
-                logger.info("主模型 %s 失败，已用备选模型 %s 生成", LLM_MODEL, model)
-            logger.info("模型 %s 输出 %d 条新闻，内容长度 %d 字符", model, news_count, len(result))
-            return result
-        except Exception as exc:
-            last_error = exc
-            if i < len(models) - 1:
-                next_model = models[i + 1]
-                logger.warning("模型 %s 失败: %s，切换到备选模型 %s", model, exc, next_model)
-            else:
-                logger.error("所有模型均失败，最后错误: %s", exc)
+    for round_num in range(max_rounds):
+        if round_num > 0:
+            wait_sec = 300  # 5 分钟
+            logger.warning("所有模型失败，第 %d 轮重试将在 %d 秒后开始...", round_num, wait_sec)
+            time.sleep(wait_sec)
 
-    raise RuntimeError(f"所有模型均失败，最后错误: {last_error}")
+        for i, model in enumerate(models):
+            try:
+                result = _call_llm_single(model, prompt)
+                # 校验输出质量：至少 3 条新闻（### 标题）
+                import re as _re
+                news_count = len(_re.findall(r'^##\s+\d+\.', result, _re.MULTILINE))
+                if news_count < 3:
+                    raise RuntimeError(
+                        f"模型 {model} 输出仅 {news_count} 条新闻（要求{TOP_N}条），"
+                        f"内容长度={len(result)}，可能被截断或质量不足"
+                    )
+                if i > 0 or round_num > 0:
+                    logger.info("使用模型 %s 生成成功（轮次 %d，序号 %d）", model, round_num + 1, i)
+                else:
+                    logger.info("模型 %s 输出 %d 条新闻，内容长度 %d 字符", model, news_count, len(result))
+                return result
+            except Exception as exc:
+                last_error = exc
+                if i < len(models) - 1:
+                    next_model = models[i + 1]
+                    logger.warning("模型 %s 失败: %s，切换到备选模型 %s", model, exc, next_model)
+                elif round_num < max_rounds - 1:
+                    logger.warning("第 %d 轮所有模型失败，将重试", round_num + 1)
+                else:
+                    logger.error("所有模型均失败（%d 轮重试），最后错误: %s", max_rounds, exc)
+
+    raise RuntimeError(f"所有模型均失败（{max_rounds} 轮重试），最后错误: {last_error}")
 
 
 def save_markdown(content: str) -> Path:
